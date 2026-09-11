@@ -20,6 +20,7 @@ part 'settings_page.dart';
 part 'shopee_service.dart';
 part 'shopee_connection.dart';
 part 'shopee_web_collector.dart';
+part 'shopee_web_collector_v2.dart';
 part 'gemini_service.dart';
 part 'engine.dart';
 part 'competitor_widgets.dart';
