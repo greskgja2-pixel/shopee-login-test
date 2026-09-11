@@ -144,6 +144,7 @@ class _ShopeeCollectorPageState extends State<_ShopeeCollectorPage> {
       ..addJavaScriptChannel('SuperAnuncio', onMessageReceived: _message)
       ..setNavigationDelegate(
         NavigationDelegate(
+          onNavigationRequest: _handleNavigation,
           onPageStarted: (_) {
             if (mounted) {
               setState(() {
@@ -159,12 +160,98 @@ class _ShopeeCollectorPageState extends State<_ShopeeCollectorPage> {
           },
           onWebResourceError: (error) {
             if (mounted && error.isForMainFrame == true) {
+              final description = error.description.toLowerCase();
+              if (description.contains('unknown_url_scheme')) return;
               setState(() => status = 'Falha ao abrir a Shopee. Tente novamente.');
             }
           },
         ),
       )
       ..loadRequest(Uri.parse(widget.targetUrl));
+  }
+
+  NavigationDecision _handleNavigation(NavigationRequest request) {
+    final raw = request.url.trim();
+    final uri = Uri.tryParse(raw);
+    if (uri == null) return NavigationDecision.prevent;
+
+    if (uri.scheme == 'http' || uri.scheme == 'https' || uri.scheme == 'about' || uri.scheme == 'data') {
+      return NavigationDecision.navigate;
+    }
+
+    final recovered = _recoverWebUrl(raw);
+    if (recovered != null) {
+      if (mounted) {
+        setState(() {
+          loading = true;
+          running = false;
+          status = 'Abrindo o anúncio pela versão web da Shopee...';
+        });
+      }
+      Future.microtask(() => controller.loadRequest(Uri.parse(recovered)));
+    } else if (mounted) {
+      setState(() {
+        running = false;
+        status = 'A Shopee tentou abrir o aplicativo externo. Mantendo a navegação dentro do Super Anúncio.';
+      });
+    }
+    return NavigationDecision.prevent;
+  }
+
+  String? _recoverWebUrl(String raw) {
+    final uri = Uri.tryParse(raw);
+    if (uri == null) return null;
+
+    if (uri.scheme == 'shopeebr' || uri.scheme == 'shopee') {
+      for (final key in const ['navigate_url', 'url', 'redirect_url', 'target_url']) {
+        final value = uri.queryParameters[key];
+        if (value == null || value.trim().isEmpty) continue;
+        final candidate = _decodeUrl(value);
+        if (candidate != null) return candidate;
+      }
+    }
+
+    if (uri.scheme == 'intent') {
+      final match = RegExp(r'S\.browser_fallback_url=([^;]+)').firstMatch(raw);
+      if (match != null) {
+        final candidate = _decodeUrl(match.group(1)!);
+        if (candidate != null) return candidate;
+      }
+      final httpsCandidate = raw
+          .replaceFirst(RegExp(r'^intent://', caseSensitive: false), 'https://')
+          .split('#Intent;')
+          .first;
+      if (_isShopeeWebUrl(httpsCandidate)) return httpsCandidate;
+    }
+
+    final embedded = RegExp(r'https%3A%2F%2F[^&;]+', caseSensitive: false).firstMatch(raw);
+    if (embedded != null) {
+      final candidate = _decodeUrl(embedded.group(0)!);
+      if (candidate != null) return candidate;
+    }
+    return null;
+  }
+
+  String? _decodeUrl(String value) {
+    var candidate = value.trim();
+    for (var i = 0; i < 3; i++) {
+      if (_isShopeeWebUrl(candidate)) return candidate;
+      try {
+        final decoded = Uri.decodeComponent(candidate);
+        if (decoded == candidate) break;
+        candidate = decoded;
+      } catch (_) {
+        break;
+      }
+    }
+    return _isShopeeWebUrl(candidate) ? candidate : null;
+  }
+
+  bool _isShopeeWebUrl(String value) {
+    final uri = Uri.tryParse(value);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) return false;
+    final host = uri.host.toLowerCase();
+    return host == 'shopee.com.br' || host.endsWith('.shopee.com.br') || host.endsWith('.shopee.com');
   }
 
   void _message(JavaScriptMessage message) {
