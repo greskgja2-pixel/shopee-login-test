@@ -33,17 +33,25 @@ class _PreparationWizardState extends State<PreparationWizard> {
   @override
   void initState() {
     super.initState();
-    _loadProduct();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadProduct());
   }
 
   Future<void> _loadProduct() async {
+    if (!mounted) return;
     setState(() {
       loadingProduct = true;
       autoError = null;
     });
     try {
-      final product = await ShopeeService.fetchProduct(widget.initialUrl);
+      final product = await ShopeeWebCollector.collectProduct(context, widget.initialUrl);
       if (!mounted) return;
+      if (product == null || product.title.trim().isEmpty) {
+        setState(() {
+          autoError = 'Não consegui concluir a leitura automática. Preencha apenas o que ficou faltando.';
+          loadingProduct = false;
+        });
+        return;
+      }
       setState(() {
         autoProduct = product;
         title.text = product.title;
@@ -55,20 +63,21 @@ class _PreparationWizardState extends State<PreparationWizard> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        autoError = 'Não consegui ler todos os dados automaticamente. Você pode corrigir/preencher o que faltar e continuar.';
+        autoError = 'A leitura automática foi interrompida. Você pode tentar novamente ou preencher o que faltar.';
         loadingProduct = false;
       });
     }
   }
 
   Future<void> _searchCompetitors() async {
-    if (title.text.trim().isEmpty) return;
+    if (title.text.trim().isEmpty || !mounted) return;
     setState(() {
       loadingCompetitors = true;
       candidates = [];
+      selectedIds.clear();
     });
     try {
-      final found = await ShopeeService.searchCompetitors(title.text.trim(), ownItemId: autoProduct?.itemId);
+      final found = await ShopeeWebCollector.searchCompetitors(context, title.text.trim(), ownItemId: autoProduct?.itemId);
       if (!mounted) return;
       setState(() {
         candidates = found.take(15).toList();
@@ -131,9 +140,20 @@ class _PreparationWizardState extends State<PreparationWizard> {
       product: autoProduct,
       competitors: selected,
     );
-    final result = AnalysisResult.build(input);
-    widget.onGenerated(result);
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(children: [CircularProgressIndicator(), SizedBox(width: 18), Expanded(child: Text('Gemini está comparando seu anúncio com os concorrentes e montando as soluções...'))]),
+      ),
+    );
+
+    final intelligent = await GeminiService.analyze(input);
+    final result = intelligent ?? AnalysisResult.build(input);
     if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pop();
+    widget.onGenerated(result);
     await Navigator.of(context).pushReplacement(MaterialPageRoute(
       builder: (_) => ResultPage(result: result, onFinalize: widget.onFinalize),
     ));
@@ -177,7 +197,7 @@ class _PreparationWizardState extends State<PreparationWizard> {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(30),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [CircularProgressIndicator(), SizedBox(height: 16), Text('Lendo o anúncio automaticamente...')]),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [CircularProgressIndicator(), SizedBox(height: 16), Text('Preparando leitura do anúncio...')]),
         ),
       );
     }
@@ -186,10 +206,12 @@ class _PreparationWizardState extends State<PreparationWizard> {
       children: [
         Text('Primeiro, eu leio o anúncio', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
         const SizedBox(height: 8),
-        Text(autoProduct != null ? 'Dados encontrados automaticamente. Confira e corrija apenas se algo estiver diferente.' : 'A leitura automática falhou parcialmente. Preencha apenas o que ficou faltando.'),
+        Text(autoProduct != null ? 'Dados coletados dentro da própria Shopee. Confira e corrija apenas se algo estiver diferente.' : 'A leitura automática ficou incompleta. Preencha apenas o que faltou.'),
         if (autoError != null) ...[
           const SizedBox(height: 12),
           NoticeBox(icon: Icons.warning_amber_rounded, text: autoError!),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(onPressed: _loadProduct, icon: const Icon(Icons.refresh), label: const Text('Tentar leitura automática novamente')),
         ],
         if (autoProduct?.imageUrl != null) ...[
           const SizedBox(height: 16),
@@ -220,13 +242,13 @@ class _PreparationWizardState extends State<PreparationWizard> {
       children: [
         Text('Contexto da análise', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
         const SizedBox(height: 8),
-        const Text('Essas perguntas ajudam a interpretar a nota sem misturar problema de tráfego com problema de conversão.'),
+        const Text('Essas perguntas ajudam a Gemini a separar problema de tráfego de problema de conversão.'),
         const SizedBox(height: 18),
-        DropdownButtonFormField<String>(value: goal, decoration: inputDecoration('Principal objetivo', Icons.flag_outlined), items: ['Vender mais', 'Melhorar anúncio', 'Aumentar visitas'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (v) => setState(() => goal = v!)),
+        DropdownButtonFormField<String>(initialValue: goal, decoration: inputDecoration('Principal objetivo', Icons.flag_outlined), items: ['Vender mais', 'Melhorar anúncio', 'Aumentar visitas'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (v) => setState(() => goal = v!)),
         const SizedBox(height: 12),
-        DropdownButtonFormField<String>(value: stage, decoration: inputDecoration('Como está o produto?', Icons.trending_up), items: ['Ainda não vende', 'Já vende', 'Vende bem'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (v) => setState(() => stage = v!)),
+        DropdownButtonFormField<String>(initialValue: stage, decoration: inputDecoration('Como está o produto?', Icons.trending_up), items: ['Ainda não vende', 'Já vende', 'Vende bem'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (v) => setState(() => stage = v!)),
         const SizedBox(height: 12),
-        DropdownButtonFormField<String>(value: issue, decoration: inputDecoration('Maior problema hoje', Icons.report_problem_outlined), items: ['Poucas visitas', 'Poucas vendas', 'Muita concorrência', 'Preço'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (v) => setState(() => issue = v!)),
+        DropdownButtonFormField<String>(initialValue: issue, decoration: inputDecoration('Maior problema hoje', Icons.report_problem_outlined), items: ['Poucas visitas', 'Poucas vendas', 'Muita concorrência', 'Preço'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (v) => setState(() => issue = v!)),
         const SizedBox(height: 18),
         Card(
           child: SwitchListTile(
@@ -258,11 +280,11 @@ class _PreparationWizardState extends State<PreparationWizard> {
           ],
         ),
         const SizedBox(height: 8),
-        const Text('A busca usa automaticamente o título do seu anúncio. Escolha só produtos realmente equivalentes.'),
+        const Text('A busca é feita dentro da Shopee usando o título do seu anúncio. Os resultados também são enriquecidos com dados do produto quando a Shopee permite.'),
         const SizedBox(height: 14),
         if (loadingCompetitors) const LinearProgressIndicator(),
         if (!loadingCompetitors && candidates.isEmpty)
-          NoticeBox(icon: Icons.search_off, text: 'A Shopee não devolveu resultados automáticos agora. Você pode tentar novamente ou adicionar concorrentes manualmente.'),
+          NoticeBox(icon: Icons.search_off, text: 'Nenhum resultado automático foi coletado. Tente novamente; se a Shopee pedir login ou verificação, conclua dentro da tela de busca.'),
         const SizedBox(height: 10),
         Row(
           children: [
