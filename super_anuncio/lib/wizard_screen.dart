@@ -43,11 +43,11 @@ class _PreparationWizardState extends State<PreparationWizard> {
       autoError = null;
     });
     try {
-      final product = await ShopeeWebCollector.collectProduct(context, widget.initialUrl);
+      final product = await ShopeeWebCollectorV2.collectProduct(context, widget.initialUrl);
       if (!mounted) return;
       if (product == null || product.title.trim().isEmpty) {
         setState(() {
-          autoError = 'Não consegui concluir a leitura automática. Preencha apenas o que ficou faltando.';
+          autoError = 'Não consegui identificar o produto real na Shopee. Para evitar informações erradas, nenhum dado genérico foi importado.';
           loadingProduct = false;
         });
         return;
@@ -63,7 +63,7 @@ class _PreparationWizardState extends State<PreparationWizard> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        autoError = 'A leitura automática foi interrompida. Você pode tentar novamente ou preencher o que faltar.';
+        autoError = 'A leitura automática foi interrompida. O app não vai preencher dados até confirmar o produto correto.';
         loadingProduct = false;
       });
     }
@@ -77,7 +77,7 @@ class _PreparationWizardState extends State<PreparationWizard> {
       selectedIds.clear();
     });
     try {
-      final found = await ShopeeWebCollector.searchCompetitors(context, title.text.trim(), ownItemId: autoProduct?.itemId);
+      final found = await ShopeeWebCollectorV2.searchCompetitors(context, title.text.trim(), ownItemId: autoProduct?.itemId);
       if (!mounted) return;
       setState(() {
         candidates = found.take(15).toList();
@@ -206,7 +206,7 @@ class _PreparationWizardState extends State<PreparationWizard> {
       children: [
         Text('Primeiro, eu leio o anúncio', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
         const SizedBox(height: 8),
-        Text(autoProduct != null ? 'Dados coletados dentro da própria Shopee. Confira e corrija apenas se algo estiver diferente.' : 'A leitura automática ficou incompleta. Preencha apenas o que faltou.'),
+        Text(autoProduct != null ? 'Produto real identificado na Shopee. Confira e corrija apenas se algo estiver diferente.' : 'A leitura automática não confirmou o produto. Nenhum dado genérico será usado.'),
         if (autoError != null) ...[
           const SizedBox(height: 12),
           NoticeBox(icon: Icons.warning_amber_rounded, text: autoError!),
@@ -280,11 +280,11 @@ class _PreparationWizardState extends State<PreparationWizard> {
           ],
         ),
         const SizedBox(height: 8),
-        const Text('A busca é feita dentro da Shopee usando o título do seu anúncio. Os resultados também são enriquecidos com dados do produto quando a Shopee permite.'),
+        const Text('A busca é feita dentro da Shopee usando o título real do seu anúncio. Só resultados com ID de produto confirmado entram na lista.'),
         const SizedBox(height: 14),
         if (loadingCompetitors) const LinearProgressIndicator(),
         if (!loadingCompetitors && candidates.isEmpty)
-          NoticeBox(icon: Icons.search_off, text: 'Nenhum resultado automático foi coletado. Tente novamente; se a Shopee pedir login ou verificação, conclua dentro da tela de busca.'),
+          NoticeBox(icon: Icons.search_off, text: 'Nenhum produto confirmado foi coletado. Tente novamente; se a Shopee pedir login ou verificação, conclua dentro da tela de busca.'),
         const SizedBox(height: 10),
         Row(
           children: [
