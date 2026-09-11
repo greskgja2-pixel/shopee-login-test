@@ -14,6 +14,7 @@ import java.io.File
 
 class MainActivity : FlutterActivity() {
     private val channelName = "super_anuncio/share"
+    private val prefsName = "super_anuncio_settings"
     private var channel: MethodChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -24,6 +25,18 @@ class MainActivity : FlutterActivity() {
                 "initialSharedText" -> result.success(sharedTextFromIntent(intent))
                 "initialReanalysis" -> result.success(reanalysisFromIntent(intent))
                 "cacheDir" -> result.success(cacheDir.absolutePath)
+                "getShopeeConnected" -> {
+                    val prefs = getSharedPreferences(prefsName, MODE_PRIVATE)
+                    result.success(prefs.getBoolean("shopee_connected", false))
+                }
+                "setShopeeConnected" -> {
+                    val value = call.arguments as? Boolean ?: false
+                    getSharedPreferences(prefsName, MODE_PRIVATE)
+                        .edit()
+                        .putBoolean("shopee_connected", value)
+                        .apply()
+                    result.success(true)
+                }
                 "shareText" -> {
                     val text = call.arguments as? String
                     if (text.isNullOrBlank()) {
