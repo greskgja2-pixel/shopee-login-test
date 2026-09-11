@@ -18,11 +18,34 @@ class _HomePageState extends State<HomePage> {
   int competitorSelections = 0;
   int adsAnalyses = 0;
   int bestScore = 0;
+  bool shopeeChecked = false;
+  bool shopeeConnected = false;
+  bool skippedConnectionThisSession = false;
 
   @override
   void initState() {
     super.initState();
     _initShareReceiver();
+    _loadShopeeState();
+  }
+
+  Future<void> _loadShopeeState() async {
+    final value = await ShopeeSession.savedConnected();
+    if (!mounted) return;
+    setState(() {
+      shopeeConnected = value;
+      shopeeChecked = true;
+    });
+  }
+
+  Future<void> _setShopeeConnected(bool value) async {
+    await ShopeeSession.saveConnected(value);
+    if (!mounted) return;
+    setState(() {
+      shopeeConnected = value;
+      shopeeChecked = true;
+      if (value) skippedConnectionThisSession = false;
+    });
   }
 
   void _openReminder(dynamic args) {
@@ -83,15 +106,33 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!shopeeChecked) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (!shopeeConnected && !skippedConnectionThisSession) {
+      return ShopeeFirstUseGate(
+        onConnected: () async => _setShopeeConnected(true),
+        onSkip: () => setState(() => skippedConnectionThisSession = true),
+      );
+    }
+
     final pages = [
       AnalyzerHome(
         sharedText: sharedText,
+        shopeeConnected: shopeeConnected,
+        onShopeeConnectionChanged: _setShopeeConnected,
         onGenerated: _onGenerated,
         onFinalize: _finalize,
       ),
       HistoryPage(history: history, onFinalize: _finalize),
       AchievementsPage(unlocked: unlockedAchievements),
-      SettingsPage(darkMode: widget.darkMode, onDarkModeChanged: widget.onDarkModeChanged),
+      SettingsPage(
+        darkMode: widget.darkMode,
+        onDarkModeChanged: widget.onDarkModeChanged,
+        shopeeConnected: shopeeConnected,
+        onShopeeConnectionChanged: _setShopeeConnected,
+      ),
     ];
 
     return Scaffold(
