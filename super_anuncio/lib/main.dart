@@ -2,8 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 part 'home_screen.dart';
 part 'analyzer_screen.dart';
@@ -15,12 +18,13 @@ part 'history_page.dart';
 part 'achievements_page.dart';
 part 'settings_page.dart';
 part 'shopee_service.dart';
+part 'shopee_web_collector.dart';
+part 'gemini_service.dart';
 part 'engine.dart';
 part 'competitor_widgets.dart';
 part 'gauge_solution_widgets.dart';
 part 'branding_widgets.dart';
 part 'utils.dart';
-
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
