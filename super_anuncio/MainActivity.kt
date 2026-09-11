@@ -1,7 +1,6 @@
 package br.com.superanuncio.super_anuncio
 
 import android.content.Intent
-import android.net.Uri
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -16,17 +15,17 @@ class MainActivity : FlutterActivity() {
         channel?.setMethodCallHandler { call, result ->
             when (call.method) {
                 "initialSharedText" -> result.success(sharedTextFromIntent(intent))
-                "openUrl" -> {
-                    val url = call.argument<String>("url")
-                    if (url.isNullOrBlank()) {
-                        result.error("INVALID_URL", "URL vazia", null)
+                "shareText" -> {
+                    val text = call.arguments as? String
+                    if (text.isNullOrBlank()) {
+                        result.error("EMPTY_TEXT", "Nada para compartilhar", null)
                     } else {
-                        try {
-                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                            result.success(true)
-                        } catch (e: Exception) {
-                            result.error("OPEN_URL_FAILED", e.message, null)
+                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, text)
                         }
+                        startActivity(Intent.createChooser(sendIntent, "Compartilhar análise"))
+                        result.success(true)
                     }
                 }
                 else -> result.notImplemented()
