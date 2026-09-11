@@ -18,6 +18,7 @@ part 'history_page.dart';
 part 'achievements_page.dart';
 part 'settings_page.dart';
 part 'shopee_service.dart';
+part 'shopee_connection.dart';
 part 'shopee_web_collector.dart';
 part 'gemini_service.dart';
 part 'engine.dart';
