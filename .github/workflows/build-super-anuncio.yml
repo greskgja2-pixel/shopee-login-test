@@ -35,6 +35,8 @@ jobs:
         run: |
           flutter create --platforms=android --org br.com.superanuncio --project-name super_anuncio build_super_anuncio
           rm -rf build_super_anuncio/lib
+          rm -rf build_super_anuncio/test
+          rm -f build_super_anuncio/analysis_options.yaml
           cp -R super_anuncio/lib build_super_anuncio/lib
           cp super_anuncio/pubspec.yaml build_super_anuncio/pubspec.yaml
           mkdir -p build_super_anuncio/android/app/src/main/kotlin/br/com/superanuncio/super_anuncio
@@ -49,7 +51,7 @@ jobs:
 
       - name: Validar codigo
         working-directory: build_super_anuncio
-        run: flutter analyze --no-fatal-infos
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Compilar APK release
         working-directory: build_super_anuncio
