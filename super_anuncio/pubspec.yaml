@@ -1,7 +1,7 @@
 name: super_anuncio
 description: Super Anúncio - análise inteligente de anúncios da Shopee.
 publish_to: 'none'
-version: 1.4.1+5
+version: 1.4.2+6
 
 environment:
   sdk: '>=3.5.0 <4.0.0'
