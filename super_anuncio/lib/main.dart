@@ -5,10 +5,21 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-part 'screens.dart';
+part 'home_screen.dart';
+part 'analyzer_screen.dart';
+part 'wizard_screen.dart';
+part 'manual_competitor.dart';
+part 'result_page.dart';
+part 'coach_page.dart';
+part 'history_page.dart';
+part 'achievements_page.dart';
+part 'settings_page.dart';
 part 'shopee_service.dart';
 part 'engine.dart';
-part 'widgets_utils.dart';
+part 'competitor_widgets.dart';
+part 'gauge_solution_widgets.dart';
+part 'branding_widgets.dart';
+part 'utils.dart';
 
 
 void main() {
