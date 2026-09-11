@@ -25,6 +25,16 @@ class _HomePageState extends State<HomePage> {
     _initShareReceiver();
   }
 
+  void _openReminder(dynamic args) {
+    if (args is! Map) return;
+    final url = '${args['url'] ?? ''}'.trim();
+    if (url.isEmpty) return;
+    setState(() {
+      sharedText = url;
+      index = 0;
+    });
+  }
+
   Future<void> _initShareReceiver() async {
     kShareChannel.setMethodCallHandler((call) async {
       if (call.method == 'sharedText' && call.arguments is String) {
@@ -32,11 +42,17 @@ class _HomePageState extends State<HomePage> {
           sharedText = call.arguments as String;
           index = 0;
         });
+      } else if (call.method == 'reanalysisReminder') {
+        _openReminder(call.arguments);
       }
     });
     try {
       final value = await kShareChannel.invokeMethod<String>('initialSharedText');
       if (value != null && value.trim().isNotEmpty) setState(() => sharedText = value);
+    } catch (_) {}
+    try {
+      final reminder = await kShareChannel.invokeMethod<dynamic>('initialReanalysis');
+      _openReminder(reminder);
     } catch (_) {}
   }
 
