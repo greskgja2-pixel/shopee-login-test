@@ -57,43 +57,24 @@ class ShopeeFirstUseGate extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Row(
-                            children: [
-                              CircleAvatar(
-                                backgroundColor: cs.primaryContainer,
-                                child: Icon(Icons.shopping_bag_outlined, color: cs.primary),
-                              ),
-                              const SizedBox(width: 12),
-                              const Expanded(
-                                child: Text('Conectar à Shopee', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-                              ),
-                            ],
-                          ),
+                          Row(children: [
+                            CircleAvatar(backgroundColor: cs.primaryContainer, child: Icon(Icons.shopping_bag_outlined, color: cs.primary)),
+                            const SizedBox(width: 12),
+                            const Expanded(child: Text('Conectar à Shopee', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900))),
+                          ]),
                           const SizedBox(height: 14),
-                          const Text(
-                            'Para ler anúncios e pesquisar concorrentes automaticamente, entre na sua conta da Shopee dentro do navegador seguro do app.',
-                            style: TextStyle(fontSize: 16, height: 1.35),
-                          ),
+                          const Text('Para ler anúncios e pesquisar concorrentes automaticamente, entre na sua conta da Shopee dentro do navegador seguro do app.', style: TextStyle(fontSize: 16, height: 1.35)),
                           const SizedBox(height: 16),
-                          const NoticeBox(
-                            icon: Icons.lock_outline,
-                            text: 'O login acontece diretamente no site oficial da Shopee. O Super Anúncio não recebe, não lê e não salva sua senha.',
-                          ),
+                          const NoticeBox(icon: Icons.lock_outline, text: 'O login acontece diretamente no site oficial da Shopee. O Super Anúncio não recebe, não lê e não salva sua senha.'),
                           const SizedBox(height: 18),
                           FilledButton.icon(
                             onPressed: () => _connect(context),
                             icon: const Icon(Icons.login),
                             label: const Text('CONECTAR À SHOPEE'),
-                            style: FilledButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              textStyle: const TextStyle(fontWeight: FontWeight.w900),
-                            ),
+                            style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), textStyle: const TextStyle(fontWeight: FontWeight.w900)),
                           ),
                           const SizedBox(height: 8),
-                          TextButton(
-                            onPressed: onSkip,
-                            child: const Text('Agora não — continuar com preenchimento manual'),
-                          ),
+                          TextButton(onPressed: onSkip, child: const Text('Agora não — continuar com preenchimento manual')),
                         ],
                       ),
                     ),
@@ -118,7 +99,7 @@ class ShopeeConnectionPage extends StatefulWidget {
 }
 
 class _ShopeeConnectionPageState extends State<ShopeeConnectionPage> {
-  late final WebViewController controller;
+  WebViewController? controller;
   bool connected = false;
   bool checking = false;
   bool loading = true;
@@ -133,7 +114,7 @@ class _ShopeeConnectionPageState extends State<ShopeeConnectionPage> {
 
   Future<void> _setup() async {
     if (widget.clearSessionFirst) await ShopeeSession.disconnect();
-    controller = WebViewController()
+    final c = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFFFFFFFF))
       ..addJavaScriptChannel('SuperAnuncio', onMessageReceived: _message)
@@ -147,15 +128,12 @@ class _ShopeeConnectionPageState extends State<ShopeeConnectionPage> {
           Future.delayed(const Duration(milliseconds: 700), _checkSession);
         },
         onWebResourceError: (error) {
-          if (mounted && error.isForMainFrame == true) {
-            setState(() => status = 'Não consegui abrir a Shopee. Verifique sua internet e tente novamente.');
-          }
+          if (mounted && error.isForMainFrame == true) setState(() => status = 'Não consegui abrir a Shopee. Verifique sua internet e tente novamente.');
         },
       ));
-    final start = widget.verifyOnly
-        ? 'https://shopee.com.br/'
-        : 'https://shopee.com.br/buyer/login?next=https%3A%2F%2Fshopee.com.br%2F';
-    await controller.loadRequest(Uri.parse(start));
+    if (mounted) setState(() => controller = c);
+    final start = widget.verifyOnly ? 'https://shopee.com.br/' : 'https://shopee.com.br/buyer/login?next=https%3A%2F%2Fshopee.com.br%2F';
+    await c.loadRequest(Uri.parse(start));
   }
 
   void _message(JavaScriptMessage message) {
@@ -166,19 +144,19 @@ class _ShopeeConnectionPageState extends State<ShopeeConnectionPage> {
     if ('${map['type']}' != 'session') return;
     final ok = map['connected'] == true;
     final label = '${map['label'] ?? ''}'.trim();
+    if (!mounted) return;
     setState(() {
       connected = ok;
       checking = false;
       accountLabel = label.isEmpty ? null : label;
-      status = ok
-          ? 'Shopee conectada. A sessão ficará salva neste aparelho.'
-          : 'Ainda não identifiquei uma sessão conectada. Entre na sua conta da Shopee abaixo.';
+      status = ok ? 'Shopee conectada. A sessão ficará salva neste aparelho.' : 'Ainda não identifiquei uma sessão conectada. Entre na sua conta da Shopee abaixo.';
     });
-    if (ok) ShopeeSession.saveConnected(true);
+    ShopeeSession.saveConnected(ok);
   }
 
   Future<void> _checkSession() async {
-    if (!mounted || loading || checking) return;
+    final c = controller;
+    if (!mounted || c == null || loading || checking) return;
     setState(() { checking = true; status = 'Verificando sua sessão da Shopee...'; });
     const script = r'''(async()=>{
       const post=(x)=>SuperAnuncio.postMessage(JSON.stringify(x));
@@ -191,11 +169,7 @@ class _ShopeeConnectionPageState extends State<ShopeeConnectionPage> {
           const j=await r.json();
           const d=j?.data||j||{};
           const user=d?.userid??d?.user_id??d?.user?.userid??d?.user?.user_id??d?.account?.userid;
-          if(user){
-            ok=true;
-            label=String(d?.username??d?.user?.username??d?.account?.username??'');
-            break;
-          }
+          if(user){ok=true;label=String(d?.username??d?.user?.username??d?.account?.username??'');break;}
         }catch(_){ }
       }
       if(!ok){
@@ -208,7 +182,7 @@ class _ShopeeConnectionPageState extends State<ShopeeConnectionPage> {
       return ok;
     })()''';
     try {
-      await controller.runJavaScript(script);
+      await c.runJavaScript(script);
     } catch (_) {
       if (mounted) setState(() { checking = false; status = 'Não consegui verificar automaticamente. Você pode tentar novamente.'; });
     }
@@ -222,10 +196,11 @@ class _ShopeeConnectionPageState extends State<ShopeeConnectionPage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final c = controller;
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.verifyOnly ? 'Verificar Shopee' : 'Conectar à Shopee'),
-        actions: [IconButton(onPressed: _checkSession, icon: const Icon(Icons.refresh), tooltip: 'Verificar conexão')],
+        actions: [IconButton(onPressed: c == null ? null : _checkSession, icon: const Icon(Icons.refresh), tooltip: 'Verificar conexão')],
       ),
       body: Column(
         children: [
@@ -233,44 +208,25 @@ class _ShopeeConnectionPageState extends State<ShopeeConnectionPage> {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             color: connected ? const Color(0xFFE5F7EA) : cs.primaryContainer,
-            child: Row(
-              children: [
-                Icon(connected ? Icons.check_circle : Icons.lock_outline, color: connected ? Colors.green.shade700 : cs.primary),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(status, style: const TextStyle(fontWeight: FontWeight.w800)),
-                      if (accountLabel != null) Text('Conta: $accountLabel'),
-                      const Text('Sua senha é digitada somente no site oficial da Shopee.', style: TextStyle(fontSize: 12)),
-                    ],
-                  ),
-                ),
-                if (loading || checking)
-                  const Padding(
-                    padding: EdgeInsets.only(left: 8),
-                    child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)),
-                  ),
-              ],
-            ),
+            child: Row(children: [
+              Icon(connected ? Icons.check_circle : Icons.lock_outline, color: connected ? Colors.green.shade700 : cs.primary),
+              const SizedBox(width: 10),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(status, style: const TextStyle(fontWeight: FontWeight.w800)),
+                if (accountLabel != null) Text('Conta: $accountLabel'),
+                const Text('Sua senha é digitada somente no site oficial da Shopee.', style: TextStyle(fontSize: 12)),
+              ])),
+              if (loading || checking) const Padding(padding: EdgeInsets.only(left: 8), child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))),
+            ]),
           ),
-          Expanded(child: WebViewWidget(controller: controller)),
+          Expanded(child: c == null ? const Center(child: CircularProgressIndicator()) : WebViewWidget(controller: c)),
           SafeArea(
             minimum: const EdgeInsets.fromLTRB(14, 8, 14, 12),
-            child: Row(
-              children: [
-                Expanded(child: OutlinedButton.icon(onPressed: _checkSession, icon: const Icon(Icons.verified_user_outlined), label: const Text('Verificar'))),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: connected ? _finish : null,
-                    icon: const Icon(Icons.check),
-                    label: const Text('CONCLUIR'),
-                  ),
-                ),
-              ],
-            ),
+            child: Row(children: [
+              Expanded(child: OutlinedButton.icon(onPressed: c == null ? null : _checkSession, icon: const Icon(Icons.verified_user_outlined), label: const Text('Verificar'))),
+              const SizedBox(width: 10),
+              Expanded(child: FilledButton.icon(onPressed: connected ? _finish : null, icon: const Icon(Icons.check), label: const Text('CONCLUIR'))),
+            ]),
           ),
         ],
       ),
