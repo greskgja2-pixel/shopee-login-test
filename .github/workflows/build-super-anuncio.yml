@@ -1,0 +1,66 @@
+name: Build Super Anuncio APK
+
+on:
+  push:
+    branches:
+      - super-anuncio-apk
+    paths:
+      - 'super_anuncio/**'
+      - '.github/workflows/build-super-anuncio.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Flutter 3.47.2
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - name: Criar projeto Android Flutter
+        run: |
+          flutter create --platforms=android --org br.com.superanuncio --project-name super_anuncio build_super_anuncio
+          rm -rf build_super_anuncio/lib
+          cp -R super_anuncio/lib build_super_anuncio/lib
+          cp super_anuncio/pubspec.yaml build_super_anuncio/pubspec.yaml
+          mkdir -p build_super_anuncio/android/app/src/main/kotlin/br/com/superanuncio/super_anuncio
+          cp super_anuncio/MainActivity.kt build_super_anuncio/android/app/src/main/kotlin/br/com/superanuncio/super_anuncio/MainActivity.kt
+          cp super_anuncio/android_manifest.xml build_super_anuncio/android/app/src/main/AndroidManifest.xml
+          mkdir -p build_super_anuncio/android/app/src/main/res/drawable
+          cp super_anuncio/ic_launcher_sa.xml build_super_anuncio/android/app/src/main/res/drawable/ic_launcher_sa.xml
+
+      - name: Dependencias
+        working-directory: build_super_anuncio
+        run: flutter pub get
+
+      - name: Compilar APK release
+        working-directory: build_super_anuncio
+        run: flutter build apk --release
+
+      - name: Preparar APK
+        run: |
+          mkdir -p dist
+          cp build_super_anuncio/build/app/outputs/flutter-apk/app-release.apk dist/Super-Anuncio-v1.0.0.apk
+          sha256sum dist/Super-Anuncio-v1.0.0.apk > dist/SHA256.txt
+
+      - name: Publicar artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: Super-Anuncio-APK
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
