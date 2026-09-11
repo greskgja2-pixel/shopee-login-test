@@ -2,9 +2,11 @@ part of 'main.dart';
 
 class AnalyzerHome extends StatefulWidget {
   final String? sharedText;
+  final bool shopeeConnected;
+  final Future<void> Function(bool) onShopeeConnectionChanged;
   final ValueChanged<AnalysisResult> onGenerated;
   final Future<List<AchievementDef>> Function(AnalysisResult) onFinalize;
-  const AnalyzerHome({super.key, this.sharedText, required this.onGenerated, required this.onFinalize});
+  const AnalyzerHome({super.key, this.sharedText, required this.shopeeConnected, required this.onShopeeConnectionChanged, required this.onGenerated, required this.onFinalize});
 
   @override
   State<AnalyzerHome> createState() => _AnalyzerHomeState();
@@ -32,12 +34,40 @@ class _AnalyzerHomeState extends State<AnalyzerHome> {
     if (data?.text != null) setState(() => link.text = extractUrl(data!.text!));
   }
 
-  void _start() {
+  Future<bool> _ensureConnection() async {
+    if (widget.shopeeConnected) return true;
+    final connected = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const ShopeeConnectionPage()),
+    );
+    if (connected == true) {
+      await widget.onShopeeConnectionChanged(true);
+      return true;
+    }
+    if (mounted) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Continuar sem conectar?'),
+          content: const Text('Sem uma sessão da Shopee, a leitura automática e a busca de concorrentes podem falhar. Você ainda pode continuar e preencher manualmente o que faltar.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Conectar')), 
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Continuar manualmente')),
+          ],
+        ),
+      );
+      return proceed == true;
+    }
+    return false;
+  }
+
+  Future<void> _start() async {
     final url = link.text.trim();
     if (url.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cole primeiro o link do anúncio da Shopee.')));
       return;
     }
+    if (!await _ensureConnection()) return;
+    if (!mounted) return;
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => PreparationWizard(
         initialUrl: url,
@@ -45,6 +75,11 @@ class _AnalyzerHomeState extends State<AnalyzerHome> {
         onFinalize: widget.onFinalize,
       ),
     ));
+  }
+
+  Future<void> _connectShopee() async {
+    final connected = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => const ShopeeConnectionPage()));
+    if (connected == true) await widget.onShopeeConnectionChanged(true);
   }
 
   @override
@@ -62,10 +97,20 @@ class _AnalyzerHomeState extends State<AnalyzerHome> {
               CircleAvatar(backgroundColor: cs.primaryContainer, child: Icon(Icons.auto_awesome, color: cs.primary)),
             ],
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 18),
+          Card(
+            color: widget.shopeeConnected ? const Color(0xFFE8F7ED) : cs.errorContainer.withOpacity(.55),
+            child: ListTile(
+              leading: Icon(widget.shopeeConnected ? Icons.check_circle : Icons.link_off, color: widget.shopeeConnected ? Colors.green.shade700 : cs.error),
+              title: Text(widget.shopeeConnected ? 'Shopee conectada' : 'Shopee não conectada', style: const TextStyle(fontWeight: FontWeight.w900)),
+              subtitle: Text(widget.shopeeConnected ? 'Sessão pronta para leitura e pesquisa automática.' : 'Conecte para aumentar a confiabilidade da coleta automática.'),
+              trailing: widget.shopeeConnected ? const Icon(Icons.verified) : TextButton(onPressed: _connectShopee, child: const Text('Conectar')),
+            ),
+          ),
+          const SizedBox(height: 20),
           Text('Auditoria completa do anúncio', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
-          const Text('Cole o link. O Super Anúncio tenta ler os dados automaticamente, encontra concorrentes e monta um plano de melhoria.'),
+          const Text('Cole o link. O Super Anúncio lê os dados na Shopee, encontra concorrentes e envia tudo para a Gemini montar a auditoria e as soluções.'),
           const SizedBox(height: 22),
           Card(
             child: Padding(
