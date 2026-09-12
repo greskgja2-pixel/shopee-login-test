@@ -4,9 +4,22 @@ class AnalyzerHome extends StatefulWidget {
   final String? sharedText;
   final bool shopeeConnected;
   final Future<void> Function(bool) onShopeeConnectionChanged;
-  final ValueChanged<AnalysisResult> onGenerated;
+  final AnalysisGeneratedCallback onGenerated;
   final Future<List<AchievementDef>> Function(AnalysisResult) onFinalize;
-  const AnalyzerHome({super.key, this.sharedText, required this.shopeeConnected, required this.onShopeeConnectionChanged, required this.onGenerated, required this.onFinalize});
+  final VoidCallback onOpenGame;
+  final bool showGameHint;
+  final VoidCallback onDismissGameHint;
+  const AnalyzerHome({
+    super.key,
+    this.sharedText,
+    required this.shopeeConnected,
+    required this.onShopeeConnectionChanged,
+    required this.onGenerated,
+    required this.onFinalize,
+    required this.onOpenGame,
+    required this.showGameHint,
+    required this.onDismissGameHint,
+  });
 
   @override
   State<AnalyzerHome> createState() => _AnalyzerHomeState();
@@ -14,6 +27,8 @@ class AnalyzerHome extends StatefulWidget {
 
 class _AnalyzerHomeState extends State<AnalyzerHome> {
   final link = TextEditingController();
+  int secretTaps = 0;
+  DateTime? lastSecretTap;
 
   @override
   void initState() {
@@ -26,6 +41,20 @@ class _AnalyzerHomeState extends State<AnalyzerHome> {
     super.didUpdateWidget(oldWidget);
     if (widget.sharedText != null && widget.sharedText != oldWidget.sharedText) {
       link.text = extractUrl(widget.sharedText!);
+    }
+  }
+
+  void _tapShield() {
+    final now = DateTime.now();
+    if (lastSecretTap == null || now.difference(lastSecretTap!) > const Duration(milliseconds: 1100)) {
+      secretTaps = 0;
+    }
+    lastSecretTap = now;
+    secretTaps += 1;
+    HapticFeedback.selectionClick();
+    if (secretTaps >= 4) {
+      secretTaps = 0;
+      widget.onOpenGame();
     }
   }
 
@@ -50,7 +79,7 @@ class _AnalyzerHomeState extends State<AnalyzerHome> {
           title: const Text('Continuar sem conectar?'),
           content: const Text('Sem uma sessão da Shopee, a leitura automática e a busca de concorrentes podem falhar. Você ainda pode continuar e preencher manualmente o que faltar.'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Conectar')), 
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Conectar')),
             FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Continuar manualmente')),
           ],
         ),
@@ -91,12 +120,31 @@ class _AnalyzerHomeState extends State<AnalyzerHome> {
         children: [
           Row(
             children: [
-              const SaShield(size: 58),
+              GestureDetector(onTap: _tapShield, behavior: HitTestBehavior.opaque, child: const SaShield(size: 58)),
               const SizedBox(width: 12),
               const Expanded(child: SuperAnuncioLogo(fontSize: 25)),
               CircleAvatar(backgroundColor: cs.primaryContainer, child: Icon(Icons.auto_awesome, color: cs.primary)),
             ],
           ),
+          if (widget.showGameHint) ...[
+            const SizedBox(height: 14),
+            Card(
+              color: cs.secondaryContainer.withOpacity(.55),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Icon(Icons.sports_esports_outlined),
+                  const SizedBox(width: 10),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('Você desbloqueou uma pausa secreta', style: TextStyle(fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 5),
+                    const Text('Quando quiser relaxar, toque 4 vezes seguidas no escudo SA desta tela. Tem um joguinho escondido por aqui.'),
+                    Align(alignment: Alignment.centerRight, child: TextButton(onPressed: widget.onDismissGameHint, child: const Text('Entendi'))),
+                  ])),
+                ]),
+              ),
+            ),
+          ],
           const SizedBox(height: 18),
           Card(
             color: widget.shopeeConnected ? const Color(0xFFE8F7ED) : cs.errorContainer.withOpacity(.55),
@@ -110,7 +158,7 @@ class _AnalyzerHomeState extends State<AnalyzerHome> {
           const SizedBox(height: 20),
           Text('Auditoria completa do anúncio', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
-          const Text('Cole o link. O Super Anúncio lê os dados na Shopee, encontra concorrentes e envia tudo para a Gemini montar a auditoria e as soluções.'),
+          const Text('Cole o link. O Super Anúncio coleta os dados na Shopee, encontra concorrentes e usa nossos sistemas para montar a auditoria e as soluções.'),
           const SizedBox(height: 22),
           Card(
             child: Padding(
