@@ -2,9 +2,16 @@ part of 'main.dart';
 
 class PreparationWizard extends StatefulWidget {
   final String initialUrl;
-  final ValueChanged<AnalysisResult> onGenerated;
+  final String? previousAnalysisId;
+  final AnalysisGeneratedCallback onGenerated;
   final Future<List<AchievementDef>> Function(AnalysisResult) onFinalize;
-  const PreparationWizard({super.key, required this.initialUrl, required this.onGenerated, required this.onFinalize});
+  const PreparationWizard({
+    super.key,
+    required this.initialUrl,
+    this.previousAnalysisId,
+    required this.onGenerated,
+    required this.onFinalize,
+  });
 
   @override
   State<PreparationWizard> createState() => _PreparationWizardState();
@@ -14,6 +21,7 @@ class _PreparationWizardState extends State<PreparationWizard> {
   int step = 0;
   bool loadingProduct = true;
   bool loadingCompetitors = false;
+  bool editingProduct = false;
   String? autoError;
   ShopeeProductData? autoProduct;
   final title = TextEditingController();
@@ -47,8 +55,9 @@ class _PreparationWizardState extends State<PreparationWizard> {
       if (!mounted) return;
       if (product == null || product.title.trim().isEmpty) {
         setState(() {
-          autoError = 'Não consegui identificar o produto real na Shopee. Para evitar informações erradas, nenhum dado genérico foi importado.';
+          autoError = 'Não consegui confirmar o produto automaticamente. Nenhum dado genérico foi importado.';
           loadingProduct = false;
+          editingProduct = true;
         });
         return;
       }
@@ -59,12 +68,14 @@ class _PreparationWizardState extends State<PreparationWizard> {
         category.text = product.category;
         if (product.price != null) price.text = product.price!.toStringAsFixed(2).replaceAll('.', ',');
         loadingProduct = false;
+        editingProduct = false;
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
-        autoError = 'A leitura automática foi interrompida. O app não vai preencher dados até confirmar o produto correto.';
+        autoError = 'A leitura automática foi interrompida. Você pode tentar novamente ou preencher apenas o que faltar.';
         loadingProduct = false;
+        editingProduct = true;
       });
     }
   }
@@ -159,9 +170,13 @@ class _PreparationWizardState extends State<PreparationWizard> {
     final result = intelligent ?? AnalysisResult.build(input);
     if (!mounted) return;
     Navigator.of(context, rootNavigator: true).pop();
-    widget.onGenerated(result);
+    widget.onGenerated(result, widget.previousAnalysisId);
     await Navigator.of(context).pushReplacement(MaterialPageRoute(
-      builder: (_) => ResultPage(result: result, onFinalize: widget.onFinalize),
+      builder: (_) => ResultPage(
+        result: result,
+        onFinalize: widget.onFinalize,
+        onGenerated: widget.onGenerated,
+      ),
     ));
   }
 
@@ -203,40 +218,82 @@ class _PreparationWizardState extends State<PreparationWizard> {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(30),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [CircularProgressIndicator(), SizedBox(height: 16), Text('Preparando leitura do anúncio...')]),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Coletando informações do anúncio...', style: TextStyle(fontWeight: FontWeight.w800)),
+          ]),
         ),
       );
     }
+
     return ListView(
       padding: const EdgeInsets.all(18),
       children: [
-        Text('Primeiro, eu leio o anúncio', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
-        const SizedBox(height: 8),
-        Text(autoProduct != null ? 'Produto real identificado na Shopee. Confira e corrija apenas se algo estiver diferente.' : 'A leitura automática não confirmou o produto. Nenhum dado genérico será usado.'),
+        Row(children: [
+          Expanded(child: Text('Informações captadas', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900))),
+          if (autoProduct != null) const Icon(Icons.verified, color: Colors.green),
+        ]),
+        const SizedBox(height: 7),
+        Text(autoProduct != null ? 'Confira rapidamente. Se algo estiver diferente, toque em Corrigir dados.' : 'A leitura automática não confirmou o produto. Preencha apenas o necessário.'),
         if (autoError != null) ...[
           const SizedBox(height: 12),
           NoticeBox(icon: Icons.warning_amber_rounded, text: autoError!),
           const SizedBox(height: 8),
           OutlinedButton.icon(onPressed: _loadProduct, icon: const Icon(Icons.refresh), label: const Text('Tentar leitura automática novamente')),
         ],
-        if (autoProduct?.imageUrl != null) ...[
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: AspectRatio(aspectRatio: 16 / 9, child: Image.network(autoProduct!.imageUrl!, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const SizedBox.shrink())),
-          ),
-        ],
-        const SizedBox(height: 16),
-        InputBox(controller: title, label: 'Título atual *', icon: Icons.title),
-        const SizedBox(height: 12),
-        InputBox(controller: description, label: 'Descrição atual', icon: Icons.description_outlined, maxLines: 6),
-        const SizedBox(height: 12),
-        InputBox(controller: category, label: 'Categoria atual', icon: Icons.category_outlined),
-        const SizedBox(height: 12),
-        InputBox(controller: price, label: 'Preço atual', icon: Icons.attach_money, keyboardType: TextInputType.number),
         if (autoProduct != null) ...[
           const SizedBox(height: 16),
-          AutoFacts(product: autoProduct!),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  if (autoProduct!.imageUrl != null)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: SizedBox(width: 92, height: 92, child: Image.network(autoProduct!.imageUrl!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported_outlined))),
+                    ),
+                  if (autoProduct!.imageUrl != null) const SizedBox(width: 12),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(title.text, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                    const SizedBox(height: 5),
+                    if (price.text.isNotEmpty) Text('R\$ ${price.text}', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w900)),
+                    if (category.text.isNotEmpty) Text(category.text, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
+                  ])),
+                ]),
+                const SizedBox(height: 12),
+                AutoFacts(product: autoProduct!),
+                if (description.text.isNotEmpty) ...[
+                  const Divider(height: 24),
+                  const Text('Descrição', style: TextStyle(fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 5),
+                  Text(description.text, maxLines: 4, overflow: TextOverflow.ellipsis),
+                ],
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(onPressed: () => showExpertTips(context, 'Imagens'), icon: const Icon(Icons.lightbulb_outline), label: const Text('Dicas de anúncio')),
+                ),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () => setState(() => editingProduct = !editingProduct),
+            icon: Icon(editingProduct ? Icons.expand_less : Icons.edit_outlined),
+            label: Text(editingProduct ? 'Ocultar correção' : 'Corrigir dados'),
+          ),
+        ],
+        if (editingProduct || autoProduct == null) ...[
+          const SizedBox(height: 14),
+          InputBox(controller: title, label: 'Título atual *', icon: Icons.title),
+          const SizedBox(height: 12),
+          InputBox(controller: description, label: 'Descrição atual', icon: Icons.description_outlined, maxLines: 6),
+          const SizedBox(height: 12),
+          InputBox(controller: category, label: 'Categoria atual', icon: Icons.category_outlined),
+          const SizedBox(height: 12),
+          InputBox(controller: price, label: 'Preço atual', icon: Icons.attach_money, keyboardType: TextInputType.number),
         ],
       ],
     );
@@ -286,11 +343,11 @@ class _PreparationWizardState extends State<PreparationWizard> {
           ],
         ),
         const SizedBox(height: 8),
-        const Text('A busca é feita dentro da Shopee usando o título real do seu anúncio. Só resultados com ID de produto confirmado entram na lista.'),
+        const Text('A busca usa o título real do seu anúncio. Se a Shopee pedir verificação, o app vai orientar você antes de continuar.'),
         const SizedBox(height: 14),
         if (loadingCompetitors) const LinearProgressIndicator(),
         if (!loadingCompetitors && candidates.isEmpty)
-          NoticeBox(icon: Icons.search_off, text: 'Nenhum produto confirmado foi coletado. Tente novamente; se a Shopee pedir login ou verificação, conclua dentro da tela de busca.'),
+          const NoticeBox(icon: Icons.search_off, text: 'Nenhum produto confirmado foi coletado. Tente novamente ou adicione um concorrente manualmente.'),
         const SizedBox(height: 10),
         Row(
           children: [
