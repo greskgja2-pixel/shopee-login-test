@@ -3,12 +3,14 @@ part of 'main.dart';
 class PreparationWizard extends StatefulWidget {
   final String initialUrl;
   final String? previousAnalysisId;
+  final AnalysisInput? previousInput;
   final AnalysisGeneratedCallback onGenerated;
   final Future<List<AchievementDef>> Function(AnalysisResult) onFinalize;
   const PreparationWizard({
     super.key,
     required this.initialUrl,
     this.previousAnalysisId,
+    this.previousInput,
     required this.onGenerated,
     required this.onFinalize,
   });
@@ -33,7 +35,9 @@ class _PreparationWizardState extends State<PreparationWizard> {
   String issue = 'Poucas visitas';
   bool adsActive = false;
   final roas = TextEditingController();
+  final roasTarget = TextEditingController();
   final adsSpend = TextEditingController();
+  final productCost = TextEditingController();
   List<CompetitorCandidate> candidates = [];
   final Set<String> selectedIds = {};
   final List<CompetitorCandidate> manualCompetitors = [];
@@ -41,6 +45,17 @@ class _PreparationWizardState extends State<PreparationWizard> {
   @override
   void initState() {
     super.initState();
+    final previous = widget.previousInput;
+    if (previous != null) {
+      goal = previous.goal;
+      stage = previous.stage;
+      issue = previous.issue;
+      adsActive = previous.adsActive;
+      if (previous.roas7d != null) roas.text = previous.roas7d!.toStringAsFixed(2).replaceAll('.', ',');
+      if (previous.roasTarget != null) roasTarget.text = previous.roasTarget!.toStringAsFixed(2).replaceAll('.', ',');
+      if (previous.adsSpend7d != null) adsSpend.text = previous.adsSpend7d!.toStringAsFixed(2).replaceAll('.', ',');
+      if (previous.productCost != null) productCost.text = previous.productCost!.toStringAsFixed(2).replaceAll('.', ',');
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadProduct());
   }
 
@@ -147,7 +162,9 @@ class _PreparationWizardState extends State<PreparationWizard> {
       issue: issue,
       adsActive: adsActive,
       roas7d: adsActive ? parseNumber(roas.text) : null,
+      roasTarget: adsActive ? parseNumber(roasTarget.text) : null,
       adsSpend7d: adsActive ? parseMoney(adsSpend.text) : null,
+      productCost: parseMoney(productCost.text),
       product: autoProduct,
       competitors: selected,
     );
@@ -264,6 +281,23 @@ class _PreparationWizardState extends State<PreparationWizard> {
                 ]),
                 const SizedBox(height: 12),
                 AutoFacts(product: autoProduct!),
+                if (autoProduct!.bestSellingVariationPrice != null) ...[
+                  const SizedBox(height: 10),
+                  NoticeBox(
+                    icon: Icons.leaderboard_outlined,
+                    text: 'Preço usado na análise: ${money(autoProduct!.bestSellingVariationPrice!)} — variação mais vendida${autoProduct!.bestSellingVariationName == null ? '' : ': ${autoProduct!.bestSellingVariationName}'}${autoProduct!.bestSellingVariationSold == null ? '' : ' • ${autoProduct!.bestSellingVariationSold} vendidos nesta variação'}.',
+                  ),
+                ] else if (autoProduct!.variationCount > 0) ...[
+                  const SizedBox(height: 10),
+                  const NoticeBox(
+                    icon: Icons.info_outline,
+                    text: 'O anúncio tem variações, mas a Shopee não informou vendas por variação nesta leitura. O app usará o melhor preço confirmado disponível e deixará isso explícito na comparação.',
+                  ),
+                ],
+                if (autoProduct!.priceMin != null && autoProduct!.priceMax != null && autoProduct!.priceMin != autoProduct!.priceMax) ...[
+                  const SizedBox(height: 7),
+                  Text('Faixa de preços do anúncio: ${money(autoProduct!.priceMin!)} a ${money(autoProduct!.priceMax!)}', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700)),
+                ],
                 if (description.text.isNotEmpty) ...[
                   const Divider(height: 24),
                   const Text('Descrição', style: TextStyle(fontWeight: FontWeight.w900)),
@@ -293,7 +327,7 @@ class _PreparationWizardState extends State<PreparationWizard> {
           const SizedBox(height: 12),
           InputBox(controller: category, label: 'Categoria atual', icon: Icons.category_outlined),
           const SizedBox(height: 12),
-          InputBox(controller: price, label: 'Preço atual', icon: Icons.attach_money, keyboardType: TextInputType.number),
+          InputBox(controller: price, label: 'Preço usado na análise', icon: Icons.attach_money, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
         ],
       ],
     );
@@ -325,8 +359,24 @@ class _PreparationWizardState extends State<PreparationWizard> {
           const SizedBox(height: 12),
           InputBox(controller: roas, label: 'ROAS dos últimos 7 dias', icon: Icons.query_stats, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
           const SizedBox(height: 12),
+          InputBox(controller: roasTarget, label: 'ROAS Alvo atual', icon: Icons.track_changes_outlined, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
+          const SizedBox(height: 12),
           InputBox(controller: adsSpend, label: 'Gasto com Ads nos últimos 7 dias', icon: Icons.payments_outlined, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
         ],
+        const SizedBox(height: 14),
+        Card(
+          child: ExpansionTile(
+            leading: const Icon(Icons.account_balance_wallet_outlined),
+            title: const Text('Custos e margem (opcional)', style: TextStyle(fontWeight: FontWeight.w800)),
+            subtitle: const Text('Preencha só se você souber o custo do produto.'),
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            children: [
+              InputBox(controller: productCost, label: 'Custo do produto', icon: Icons.inventory_2_outlined, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
+              const SizedBox(height: 10),
+              const Text('Esse valor ajuda o app a estimar um limite preliminar de rentabilidade para Ads. Taxas, impostos, frete, embalagem e outros custos variáveis não entram automaticamente nessa conta.', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -343,7 +393,7 @@ class _PreparationWizardState extends State<PreparationWizard> {
           ],
         ),
         const SizedBox(height: 8),
-        const Text('A busca usa o título real do seu anúncio. Se a Shopee pedir verificação, o app vai orientar você antes de continuar.'),
+        const Text('A busca usa o título real do seu anúncio. Quando a Shopee disponibiliza vendas por variação, o app usa a variação líder também nos concorrentes para deixar a comparação de preço mais justa.'),
         const SizedBox(height: 14),
         if (loadingCompetitors) const LinearProgressIndicator(),
         if (!loadingCompetitors && candidates.isEmpty)
