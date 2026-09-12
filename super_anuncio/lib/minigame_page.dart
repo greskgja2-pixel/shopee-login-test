@@ -55,6 +55,10 @@ class _SaArcadePageState extends State<SaArcadePage> {
   void _update() {
     if (!mounted || gameOver) return;
     tick++;
+
+    // Aproximadamente 4 tiros por segundo. O jogador só precisa pilotar.
+    if (tick % 15 == 0) _shootAuto();
+
     if (tick % 44 == 0) {
       enemies.add(_ArcadeEnemy(x: .08 + rng.nextDouble() * .84, y: -.06, speed: .0024 + rng.nextDouble() * .0022));
     }
@@ -100,10 +104,11 @@ class _SaArcadePageState extends State<SaArcadePage> {
     if (mounted) setState(() {});
   }
 
-  void _shoot() {
+  void _shootAuto() {
     if (gameOver) return;
     bullets.add(_ArcadeBullet(x: shipX, y: .82));
-    if (!muted) audio.shot();
+    // Mantém o efeito presente sem transformar a rajada automática em ruído contínuo.
+    if (!muted && tick % 30 == 0) audio.shot();
   }
 
   void _move(double dx, double width) {
@@ -168,7 +173,6 @@ class _SaArcadePageState extends State<SaArcadePage> {
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onPanUpdate: (d) => _move(d.delta.dx, constraints.maxWidth),
-                onTap: _shoot,
                 child: CustomPaint(
                   size: Size.infinite,
                   painter: _ArcadePainter(shipX: shipX, bullets: bullets, enemies: enemies, tick: tick),
@@ -190,11 +194,11 @@ class _SaArcadePageState extends State<SaArcadePage> {
                 left: 18,
                 right: 18,
                 bottom: 22,
-                child: Row(children: [
-                  Expanded(child: Text('Arraste para mover • toque para atirar', style: TextStyle(color: Colors.white.withOpacity(.72), fontWeight: FontWeight.w700))),
-                  const SizedBox(width: 10),
-                  FilledButton.icon(onPressed: _shoot, icon: const Icon(Icons.flash_on), label: const Text('ATIRAR')),
-                ]),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(color: Colors.black.withOpacity(.35), borderRadius: BorderRadius.circular(18)),
+                  child: Text('Arraste para mover • tiros automáticos', textAlign: TextAlign.center, style: TextStyle(color: Colors.white.withOpacity(.82), fontWeight: FontWeight.w800)),
+                ),
               ),
               if (gameOver)
                 Positioned.fill(
