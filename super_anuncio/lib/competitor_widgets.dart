@@ -59,27 +59,89 @@ class AutoFacts extends StatelessWidget {
   }
 }
 
-class DimensionCard extends StatelessWidget {
+class DimensionCard extends StatefulWidget {
   final AuditDimension dimension;
   const DimensionCard({super.key, required this.dimension});
 
   @override
+  State<DimensionCard> createState() => _DimensionCardState();
+}
+
+class _DimensionCardState extends State<DimensionCard> {
+  bool expanded = false;
+
+  @override
   Widget build(BuildContext context) {
+    final dimension = widget.dimension;
     final pct = dimension.score / dimension.maxScore;
     final color = pct >= .8 ? Colors.green : pct >= .55 ? Colors.orange : Colors.red;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Card(
         child: ExpansionTile(
+          onExpansionChanged: (value) => setState(() => expanded = value),
           leading: CircleAvatar(backgroundColor: color.withOpacity(.14), child: Icon(dimension.icon, color: color)),
-          title: Text(dimension.name, style: const TextStyle(fontWeight: FontWeight.w900)),
-          subtitle: LinearProgressIndicator(value: pct, color: color, minHeight: 6, borderRadius: BorderRadius.circular(10)),
-          trailing: Text('${dimension.score}/${dimension.maxScore}', style: TextStyle(fontWeight: FontWeight.w900, color: color)),
-          children: [Padding(padding: const EdgeInsets.fromLTRB(18, 0, 18, 18), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(dimension.reason), const SizedBox(height: 8), Text('Como melhorar: ${dimension.action}', style: const TextStyle(fontWeight: FontWeight.w700))]))],
+          title: Row(children: [
+            Expanded(child: Text(dimension.name, style: const TextStyle(fontWeight: FontWeight.w900))),
+            Text('${dimension.score}/${dimension.maxScore}', style: TextStyle(fontWeight: FontWeight.w900, color: color)),
+            const SizedBox(width: 7),
+            AnimatedRotation(
+              turns: expanded ? .5 : 0,
+              duration: const Duration(milliseconds: 180),
+              child: const Icon(Icons.keyboard_arrow_down_rounded),
+            ),
+          ]),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: LinearProgressIndicator(value: pct, color: color, minHeight: 6, borderRadius: BorderRadius.circular(10)),
+          ),
+          trailing: const SizedBox.shrink(),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 2, 18, 18),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                _DimensionDetailBlock(
+                  icon: Icons.help_outline,
+                  title: 'Por que recebeu essa nota',
+                  text: dimension.reason,
+                ),
+                const SizedBox(height: 9),
+                _DimensionDetailBlock(
+                  icon: Icons.build_circle_outlined,
+                  title: 'Como melhorar',
+                  text: dimension.action,
+                ),
+                const SizedBox(height: 9),
+                ExpertTipsPanel(dimensionName: dimension.name),
+              ]),
+            ),
+          ],
         ),
       ),
     );
   }
+}
+
+class _DimensionDetailBlock extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String text;
+  const _DimensionDetailBlock({required this.icon, required this.title, required this.text});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.45),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [Icon(icon, size: 19), const SizedBox(width: 7), Text(title, style: const TextStyle(fontWeight: FontWeight.w900))]),
+          const SizedBox(height: 6),
+          Text(text),
+        ]),
+      );
 }
 
 class CompetitiveSummary extends StatelessWidget {
