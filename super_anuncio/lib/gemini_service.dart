@@ -10,6 +10,9 @@ class GeminiService {
       req.headers.contentType = ContentType.json;
       req.headers.set(HttpHeaders.acceptHeader, 'application/json');
       final p = input.product;
+      final gallery = p is RichShopeeProductData
+          ? p.imageUrls.take(8).toList()
+          : <String>[if (p?.imageUrl != null) p!.imageUrl!];
       final payload = {
         'product': {
           'url': input.url,
@@ -18,6 +21,7 @@ class GeminiService {
           'category': input.category,
           'price': input.price,
           'imageUrl': p?.imageUrl,
+          'imageUrls': gallery,
           'priceBeforeDiscount': p?.priceBeforeDiscount,
           'rating': p?.rating,
           'reviewCount': p?.reviewCount,
