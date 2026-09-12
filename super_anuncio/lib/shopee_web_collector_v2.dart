@@ -3,19 +3,18 @@ part of 'main.dart';
 class ShopeeWebCollectorV2 {
   static Future<ShopeeProductData?> collectProduct(BuildContext context, String url) async {
     final raw = await Navigator.of(context).push<Map<String, dynamic>>(
-      MaterialPageRoute(
-        builder: (_) => _ShopeeCollectorV2Page(
-          mode: _CollectorV2Mode.product,
-          targetUrl: url,
-        ),
-      ),
+      MaterialPageRoute(builder: (_) => _ShopeeCollectorV2Page(mode: _CollectorV2Mode.product, targetUrl: url)),
     );
     if (raw == null) return null;
     final title = '${raw['title'] ?? ''}'.trim();
     final shopId = '${raw['shopId'] ?? ''}'.trim();
     final itemId = '${raw['itemId'] ?? ''}'.trim();
     if (title.isEmpty || (shopId.isEmpty && itemId.isEmpty)) return null;
-    return ShopeeProductData(
+    final imageUrls = (raw['imageUrls'] as List? ?? const [])
+        .map((e) => '$e'.trim())
+        .where((e) => e.startsWith('http'))
+        .toList();
+    return RichShopeeProductData(
       url: '${raw['url'] ?? url}',
       shopId: shopId,
       itemId: itemId,
@@ -23,13 +22,14 @@ class ShopeeWebCollectorV2 {
       description: '${raw['description'] ?? ''}'.trim(),
       category: '${raw['category'] ?? ''}'.trim(),
       imageUrl: _s(raw['imageUrl']),
+      imageUrls: imageUrls,
       price: _d(raw['price']),
       priceBeforeDiscount: _d(raw['priceBeforeDiscount']),
       rating: _d(raw['rating']),
       reviewCount: _i(raw['reviewCount']),
       sold: _i(raw['sold']),
       stock: _i(raw['stock']),
-      imageCount: _i(raw['imageCount']) ?? 0,
+      imageCount: _i(raw['imageCount']) ?? imageUrls.length,
       hasVideo: raw['hasVideo'] == true,
       attributesCount: _i(raw['attributesCount']) ?? 0,
       variationCount: _i(raw['variationCount']) ?? 0,
@@ -49,12 +49,7 @@ class ShopeeWebCollectorV2 {
         .join(' ');
     final url = 'https://shopee.com.br/search?keyword=${Uri.encodeQueryComponent(query)}';
     final raw = await Navigator.of(context).push<List<dynamic>>(
-      MaterialPageRoute(
-        builder: (_) => _ShopeeCollectorV2Page(
-          mode: _CollectorV2Mode.search,
-          targetUrl: url,
-        ),
-      ),
+      MaterialPageRoute(builder: (_) => _ShopeeCollectorV2Page(mode: _CollectorV2Mode.search, targetUrl: url)),
     );
     if (raw == null) return const [];
 
@@ -118,10 +113,12 @@ class _ShopeeCollectorV2PageState extends State<_ShopeeCollectorV2Page> {
   bool loading = true;
   bool running = false;
   bool blocked = false;
+  bool challengeFocused = false;
   int redirects = 0;
   int clearChallengeChecks = 0;
   Timer? verificationWatcher;
   String status = 'Abrindo a Shopee...';
+  double progress = 0;
 
   @override
   void initState() {
@@ -134,25 +131,25 @@ class _ShopeeCollectorV2PageState extends State<_ShopeeCollectorV2Page> {
       ..setNavigationDelegate(NavigationDelegate(
         onNavigationRequest: _navigation,
         onPageStarted: (_) {
-          if (!mounted) return;
           verificationWatcher?.cancel();
+          challengeFocused = false;
+          if (!mounted) return;
           setState(() {
             loading = true;
             running = false;
             blocked = false;
+            progress = 0;
             status = 'Carregando página da Shopee...';
           });
         },
         onPageFinished: (_) {
           if (!mounted) return;
           setState(() => loading = false);
-          _fitPageToScreen();
-          Future.delayed(const Duration(milliseconds: 1100), _run);
+          Future.delayed(const Duration(milliseconds: 650), _run);
         },
         onWebResourceError: (error) {
           if (!mounted || error.isForMainFrame != true) return;
-          final d = error.description.toLowerCase();
-          if (d.contains('unknown_url_scheme')) return;
+          if (error.description.toLowerCase().contains('unknown_url_scheme')) return;
           setState(() {
             running = false;
             status = 'Não consegui carregar esta página da Shopee.';
@@ -172,9 +169,7 @@ class _ShopeeCollectorV2PageState extends State<_ShopeeCollectorV2Page> {
     final raw = request.url.trim();
     final uri = Uri.tryParse(raw);
     if (uri == null) return NavigationDecision.prevent;
-    if (uri.scheme == 'http' || uri.scheme == 'https' || uri.scheme == 'about' || uri.scheme == 'data') {
-      return NavigationDecision.navigate;
-    }
+    if (uri.scheme == 'http' || uri.scheme == 'https' || uri.scheme == 'about' || uri.scheme == 'data') return NavigationDecision.navigate;
     final recovered = _recoverWebUrl(raw);
     if (recovered != null && redirects < 8) {
       redirects++;
@@ -182,7 +177,7 @@ class _ShopeeCollectorV2PageState extends State<_ShopeeCollectorV2Page> {
         setState(() {
           loading = true;
           running = false;
-          status = 'Convertendo o link compartilhado para a página web do produto...';
+          status = 'Abrindo a página real do produto...';
         });
       }
       Future.microtask(() => controller.loadRequest(Uri.parse(recovered)));
@@ -238,7 +233,7 @@ class _ShopeeCollectorV2PageState extends State<_ShopeeCollectorV2Page> {
   void _message(JavaScriptMessage message) {
     dynamic decoded;
     try { decoded = jsonDecode(message.message); } catch (_) { return; }
-    if (decoded is! Map) return;
+    if (decoded is! Map || !mounted) return;
     final m = Map<String, dynamic>.from(decoded);
     final type = '${m['type'] ?? ''}';
 
@@ -246,9 +241,12 @@ class _ShopeeCollectorV2PageState extends State<_ShopeeCollectorV2Page> {
       setState(() {
         blocked = true;
         running = false;
-        status = 'Verifique para continuar na Shopee. Responda ao desafio abaixo.';
+        status = 'Resolva o CAPTCHA da Shopee para continuar';
       });
-      _fitAndCenterVerification();
+      if (!challengeFocused) {
+        challengeFocused = true;
+        _focusChallengeOnce();
+      }
       _startVerificationWatcher();
       return;
     }
@@ -266,13 +264,26 @@ class _ShopeeCollectorV2PageState extends State<_ShopeeCollectorV2Page> {
       return;
     }
     if (type == 'progress') {
-      setState(() => status = 'Pesquisando concorrentes... ${m['count'] ?? 0} encontrados');
+      final pct = m['percent'];
+      if (pct is num) {
+        setState(() {
+          progress = (pct.toDouble() / 100).clamp(0, 1);
+          status = '${m['message'] ?? 'Coletando informações do anúncio...'}';
+        });
+      } else {
+        setState(() => status = 'Pesquisando concorrentes... ${m['count'] ?? 0} encontrados');
+      }
       return;
     }
     if (type == 'product') {
       verificationWatcher?.cancel();
       final data = m['data'];
-      if (data is Map) Navigator.pop(context, Map<String, dynamic>.from(data));
+      if (data is Map) {
+        setState(() { progress = 1; status = 'Coleta concluída'; });
+        Future.delayed(const Duration(milliseconds: 180), () {
+          if (mounted) Navigator.pop(context, Map<String, dynamic>.from(data));
+        });
+      }
       return;
     }
     if (type == 'search') {
@@ -288,30 +299,20 @@ class _ShopeeCollectorV2PageState extends State<_ShopeeCollectorV2Page> {
     }
   }
 
-  Future<void> _fitPageToScreen() async {
-    try {
-      await controller.runJavaScript(_fitPageScript);
-    } catch (_) {}
-  }
-
-  Future<void> _fitAndCenterVerification() async {
-    try {
-      await controller.runJavaScript(_centerVerificationScript);
-    } catch (_) {}
+  Future<void> _focusChallengeOnce() async {
+    try { await controller.runJavaScript(_centerVerificationScript); } catch (_) {}
   }
 
   void _startVerificationWatcher() {
     verificationWatcher?.cancel();
     clearChallengeChecks = 0;
-    verificationWatcher = Timer.periodic(const Duration(milliseconds: 900), (_) async {
+    verificationWatcher = Timer.periodic(const Duration(milliseconds: 800), (_) async {
       if (!mounted || !blocked) return;
       try {
         final raw = await controller.runJavaScriptReturningResult(_challengeStateScript);
-        final text = raw.toString().toLowerCase();
-        final hasChallenge = text.contains('true');
+        final hasChallenge = raw.toString().toLowerCase().contains('true');
         if (hasChallenge) {
           clearChallengeChecks = 0;
-          await _fitAndCenterVerification();
         } else {
           clearChallengeChecks++;
           if (clearChallengeChecks >= 2) {
@@ -319,9 +320,13 @@ class _ShopeeCollectorV2PageState extends State<_ShopeeCollectorV2Page> {
             if (!mounted) return;
             setState(() {
               blocked = false;
-              status = 'Verificação concluída. Continuando...';
+              challengeFocused = false;
+              status = 'Verificação concluída. Coletando informações...';
             });
-            await Future.delayed(const Duration(milliseconds: 500));
+            try {
+              await controller.runJavaScript("if(document.body){document.body.style.zoom='';document.body.style.transformOrigin='';} window.__SA_CAPTCHA_FOCUSED__=false;");
+            } catch (_) {}
+            await Future.delayed(const Duration(milliseconds: 300));
             _run();
           }
         }
@@ -330,12 +335,12 @@ class _ShopeeCollectorV2PageState extends State<_ShopeeCollectorV2Page> {
   }
 
   Future<void> _run() async {
-    if (!mounted || loading || running) return;
+    if (!mounted || loading || running || blocked) return;
     setState(() {
-      blocked = false;
       running = true;
+      progress = widget.mode == _CollectorV2Mode.product ? .08 : 0;
       status = widget.mode == _CollectorV2Mode.product
-          ? 'Identificando o produto real e coletando seus dados...'
+          ? 'Coletando informações do anúncio...'
           : 'Pesquisando produtos equivalentes na Shopee...';
     });
     try {
@@ -345,24 +350,10 @@ class _ShopeeCollectorV2PageState extends State<_ShopeeCollectorV2Page> {
     }
   }
 
-  static const String _fitPageScript = r'''
-(() => {
-  let meta=document.querySelector('meta[name="viewport"]');
-  if(!meta){meta=document.createElement('meta');meta.name='viewport';document.head?.appendChild(meta);}
-  meta.setAttribute('content','width=device-width, initial-scale=1.0, minimum-scale=0.3, maximum-scale=3.0, user-scalable=yes');
-  const pageWidth=Math.max(document.documentElement?.scrollWidth||0,document.body?.scrollWidth||0,1100);
-  const scale=Math.max(.40,Math.min(.62,(innerWidth/pageWidth)*1.02));
-  if(document.body){document.body.style.zoom=String(scale);document.body.style.transformOrigin='top left';}
-  document.documentElement.style.overflowX='auto';
-  window.scrollTo({left:0,top:0,behavior:'auto'});
-  return true;
-})();
-''';
-
   static const String _challengeStateScript = r'''
 (() => {
   const body=(document.body?.innerText||'').toLowerCase();
-  const exact=/verifique\s+para\s+continuar|arraste\s+para\s+completar\s+o\s+quebra-cabe[cç]a|verifica[cç][aã]o\s+de\s+seguran[cç]a|deslize\s+para\s+completar|tente\s+novamente/;
+  const exact=/verifique\s+para\s+continuar|arraste\s+para\s+completar\s+o\s+quebra[- ]cabeça|arraste\s+para\s+completar\s+o\s+quebra[- ]cabeca|verifica[cç][aã]o\s+de\s+seguran[cç]a|deslize\s+para\s+completar|tente\s+novamente/;
   const sel='iframe[src*="captcha" i],iframe[src*="verify" i],iframe[src*="challenge" i],[class*="captcha" i],[id*="captcha" i],[class*="verify" i],[id*="verify" i],[class*="challenge" i],[id*="challenge" i]';
   return exact.test(body)||!!document.querySelector(sel)||/captcha|verify|challenge|traffic/.test(location.href.toLowerCase());
 })();
@@ -370,48 +361,41 @@ class _ShopeeCollectorV2PageState extends State<_ShopeeCollectorV2Page> {
 
   static const String _centerVerificationScript = r'''
 (() => {
+  if(window.__SA_CAPTCHA_FOCUSED__) return true;
+  window.__SA_CAPTCHA_FOCUSED__=true;
   const norm=s=>String(s||'').toLowerCase().replace(/\s+/g,' ').trim();
-  let meta=document.querySelector('meta[name="viewport"]');
-  if(!meta){meta=document.createElement('meta');meta.name='viewport';document.head?.appendChild(meta);}
-  meta.setAttribute('content','width=device-width, initial-scale=1.0, minimum-scale=0.3, maximum-scale=3.0, user-scalable=yes');
-  const pageWidth=Math.max(document.documentElement?.scrollWidth||0,document.body?.scrollWidth||0,1100);
-  const scale=Math.max(.40,Math.min(.58,(innerWidth/pageWidth)*1.02));
-  if(document.body){document.body.style.zoom=String(scale);document.body.style.transformOrigin='top left';}
-  document.documentElement.style.overflowX='auto';
-
-  const exact=/verifique para continuar|arraste para completar o quebra-cabe[cç]a|verifica[cç][aã]o de seguran[cç]a|deslize para completar|tente novamente/;
-  const visible=el=>{if(!el)return false;const s=getComputedStyle(el),r=el.getBoundingClientRect();return s.display!=='none'&&s.visibility!=='hidden'&&r.width>70&&r.height>30;};
-  let matches=[];
-  for(const el of document.querySelectorAll('main,section,article,div,h1,h2,h3,h4,p,span')){
+  const exact=/verifique para continuar|arraste para completar o quebra[- ]cabeça|arraste para completar o quebra[- ]cabeca|verifica[cç][aã]o de seguran[cç]a|deslize para completar|tente novamente/;
+  const visible=el=>{if(!el)return false;const s=getComputedStyle(el),r=el.getBoundingClientRect();return s.display!=='none'&&s.visibility!=='hidden'&&r.width>60&&r.height>30;};
+  let target=null;
+  const matches=[];
+  for(const el of document.querySelectorAll('main,section,article,div')){
     if(!visible(el))continue;
     const t=norm(el.innerText||el.textContent||'');
     if(t&&t.length<1800&&exact.test(t)){
-      const r=el.getBoundingClientRect();
-      matches.push({el,area:r.width*r.height});
+      const r=el.getBoundingClientRect();matches.push({el,area:r.width*r.height});
     }
   }
-  matches.sort((a,b)=>a.area-b.area);
-  let target=matches[0]?.el||null;
+  matches.sort((a,b)=>a.area-b.area);target=matches[0]?.el||null;
   if(!target){
-    const sels=['iframe[src*="captcha" i]','iframe[src*="verify" i]','iframe[src*="challenge" i]','[class*="captcha" i]','[id*="captcha" i]','[class*="verify" i]','[id*="verify" i]','[class*="challenge" i]','[id*="challenge" i]'];
+    const sels=['iframe[src*="captcha" i]','iframe[src*="verify" i]','iframe[src*="challenge" i]','[class*="captcha" i]','[id*="captcha" i]','[class*="verify" i]','[id*="verify" i]'];
     for(const s of sels){const e=document.querySelector(s);if(visible(e)){target=e;break;}}
   }
-  if(!target){
-    const frames=[...document.querySelectorAll('iframe')].filter(visible);
-    target=frames.sort((a,b)=>{const ra=a.getBoundingClientRect(),rb=b.getBoundingClientRect();return (rb.width*rb.height)-(ra.width*ra.height);})[0]||null;
-  }
-  if(target){
-    target.scrollIntoView({behavior:'auto',block:'center',inline:'center'});
-    setTimeout(()=>{
-      const r=target.getBoundingClientRect();
-      const left=Math.max(0,window.scrollX+r.left-(innerWidth-r.width)/2);
-      const top=Math.max(0,window.scrollY+r.top-(innerHeight-r.height)/2);
-      window.scrollTo({left,top,behavior:'smooth'});
-    },120);
-  }else{
-    const left=Math.max(0,(document.documentElement.scrollWidth-innerWidth)/2);
-    window.scrollTo({left,top:Math.max(0,document.documentElement.scrollHeight*.12),behavior:'smooth'});
-  }
+  const vw=Math.max(320,innerWidth||360);
+  const pageWidth=Math.max(vw,document.documentElement?.scrollWidth||vw,document.body?.scrollWidth||vw);
+  const scale=Math.max(.42,Math.min(.82,(vw/pageWidth)*.96));
+  if(document.body){document.body.style.zoom=String(scale);document.body.style.transformOrigin='top left';}
+  document.documentElement.style.overflowX='auto';
+  setTimeout(()=>{
+    if(target){
+      target.scrollIntoView({behavior:'auto',block:'center',inline:'center'});
+      setTimeout(()=>{
+        const r=target.getBoundingClientRect();
+        const left=Math.max(0,window.scrollX+r.left-(innerWidth-r.width)/2);
+        const top=Math.max(0,window.scrollY+r.top-(innerHeight-r.height)/2);
+        window.scrollTo({left,top,behavior:'auto'});
+      },70);
+    }
+  },90);
   return true;
 })();
 ''';
@@ -423,7 +407,7 @@ const SA2={
  blocked:()=>{
    const u=location.href.toLowerCase();
    const b=String(document.body?.innerText||'').toLowerCase();
-   const exact=/verifique\s+para\s+continuar|arraste\s+para\s+completar\s+o\s+quebra-cabe[cç]a|verifica[cç][aã]o\s+de\s+seguran[cç]a|deslize\s+para\s+completar|tente\s+novamente/;
+   const exact=/verifique\s+para\s+continuar|arraste\s+para\s+completar\s+o\s+quebra[- ]cabeça|arraste\s+para\s+completar\s+o\s+quebra[- ]cabeca|verifica[cç][aã]o\s+de\s+seguran[cç]a|deslize\s+para\s+completar|tente\s+novamente/;
    return exact.test(b)||/captcha|verify|traffic|challenge/.test(u)||!!document.querySelector('iframe[src*="captcha" i],iframe[src*="verify" i],iframe[src*="challenge" i],[class*="captcha" i],[id*="captcha" i],[class*="verify" i],[id*="verify" i],[class*="challenge" i],[id*="challenge" i]')||(!!document.querySelector('input[type="password"]')&&/entrar|login|senha/.test(b.slice(0,2000)));
  },
  decode:s=>{let x=String(s||'');for(let i=0;i<4;i++){try{const y=decodeURIComponent(x);if(y===x)break;x=y}catch(_){break}}return x},
@@ -435,9 +419,7 @@ const SA2={
  },
  candidates:()=>{
    const out=[location.href];
-   for(const sel of ['link[rel="canonical"]','meta[property="og:url"]','meta[name="twitter:url"]']){
-     const e=document.querySelector(sel); if(e)out.push(e.href||e.content||'');
-   }
+   for(const sel of ['link[rel="canonical"]','meta[property="og:url"]','meta[name="twitter:url"]']){const e=document.querySelector(sel);if(e)out.push(e.href||e.content||'');}
    for(const a of [...document.querySelectorAll('a[href]')].slice(0,500))out.push(a.href||'');
    return out.filter(Boolean);
  },
@@ -454,8 +436,6 @@ const SA2={
    const html=document.documentElement?.innerHTML||'';
    let m=html.match(/https?:\\?\/\\?\/[^\"'<>\s]*shopee\.com\.br[^\"'<>\s]*-i\.\d+\.\d+/i);
    if(m)return SA2.decode(m[0].replace(/\\\//g,'/'));
-   m=html.match(/https%3A%2F%2F[^\"'<>\s&]+-i%2E\d+%2E\d+/i);
-   if(m)return SA2.decode(m[0]);
    return null;
  },
  price:v=>{const n=Number(v);if(!Number.isFinite(n)||n<=0)return null;return n>10000?n/100000:n;},
@@ -470,10 +450,11 @@ const SA2={
  },
  product:(item,ids)=>{
    const images=Array.isArray(item?.images)?item.images:[];
+   const imageUrls=images.map(SA2.img).filter(Boolean).slice(0,12);
    const rating=Number(item?.item_rating?.rating_star??item?.rating_star);
    const models=Array.isArray(item?.models)?item.models:[];
    const tiers=Array.isArray(item?.tier_variations)?item.tier_variations:[];
-   return {url:location.href,shopId:String(ids.shopId),itemId:String(ids.itemId),title:String(item?.name||item?.title||''),description:String(item?.description||''),category:SA2.cat(item),imageUrl:SA2.img(item?.image||item?.image_id||images[0]),price:SA2.price(item?.price??item?.price_min??item?.current_price),priceBeforeDiscount:SA2.price(item?.price_before_discount??item?.price_min_before_discount),rating:Number.isFinite(rating)?rating:null,reviewCount:Number(item?.cmt_count??item?.rating_count??item?.review_count)||null,sold:Number(item?.sold??item?.historical_sold??item?.global_sold_count)||null,stock:Number(item?.stock)||null,imageCount:images.length,hasVideo:(Array.isArray(item?.video_info_list)&&item.video_info_list.length>0)||!!item?.video_info,attributesCount:Array.isArray(item?.attributes)?item.attributes.length:0,variationCount:models.length||tiers.length};
+   return {url:location.href,shopId:String(ids.shopId),itemId:String(ids.itemId),title:String(item?.name||item?.title||''),description:String(item?.description||''),category:SA2.cat(item),imageUrl:SA2.img(item?.image||item?.image_id||images[0]),imageUrls,price:SA2.price(item?.price??item?.price_min??item?.current_price),priceBeforeDiscount:SA2.price(item?.price_before_discount??item?.price_min_before_discount),rating:Number.isFinite(rating)?rating:null,reviewCount:Number(item?.cmt_count??item?.rating_count??item?.review_count)||null,sold:Number(item?.sold??item?.historical_sold??item?.global_sold_count)||null,stock:Number(item?.stock)||null,imageCount:images.length,hasVideo:(Array.isArray(item?.video_info_list)&&item.video_info_list.length>0)||!!item?.video_info,attributesCount:Array.isArray(item?.attributes)?item.attributes.length:0,variationCount:models.length||tiers.length};
  }
 };
 ''';
@@ -483,15 +464,24 @@ const SA2={
  if(window.__SA2_RUNNING__)return true;window.__SA2_RUNNING__=1;
  try{
    if(SA2.blocked()){SA2.post({type:'blocked'});return true;}
+   SA2.post({type:'progress',percent:18,message:'Identificando o produto real...'});
    for(let attempt=0;attempt<4;attempt++){
      const ids=SA2.findIds();
      if(ids){
+       SA2.post({type:'progress',percent:38,message:'Lendo título, preço e categoria...'});
        const item=await SA2.detail(ids);
-       if(item&&String(item?.name||'').trim().length>3){SA2.post({type:'product',data:SA2.product(item,ids)});return true;}
+       if(item&&String(item?.name||'').trim().length>3){
+         SA2.post({type:'progress',percent:64,message:'Coletando imagens, avaliações e variações...'});
+         await new Promise(r=>setTimeout(r,120));
+         SA2.post({type:'progress',percent:86,message:'Validando as informações coletadas...'});
+         await new Promise(r=>setTimeout(r,120));
+         SA2.post({type:'progress',percent:100,message:'Coleta concluída'});
+         SA2.post({type:'product',data:SA2.product(item,ids)});return true;
+       }
      }
      const u=SA2.findProductUrl();
      if(u&&u!==location.href&&SA2.idsFrom(u)){SA2.post({type:'navigate',url:u});return true;}
-     await new Promise(r=>setTimeout(r,850));
+     await new Promise(r=>setTimeout(r,700));
    }
    SA2.post({type:'error',message:'A Shopee abriu uma página genérica, mas ainda não encontrei o produto real. Não vou preencher dados incorretos.'});
  }catch(e){SA2.post({type:'error',message:String(e?.message||e)})}
@@ -525,7 +515,7 @@ const SA2={
    let items=[];
    for(let r=0;r<12;r++){
      items=parse();SA2.post({type:'progress',count:items.length});if(items.length>=15)break;
-     window.scrollBy({top:Math.max(600,Math.floor(window.innerHeight*.85)),behavior:'smooth'});await sleep(650);
+     window.scrollBy({top:Math.max(600,Math.floor(window.innerHeight*.85)),behavior:'smooth'});await sleep(600);
    }
    items=parse();
    for(let i=0;i<Math.min(items.length,15);i++){
@@ -540,32 +530,79 @@ const SA2={
 
   @override
   Widget build(BuildContext context) {
+    final showWorkOverlay = running && !blocked;
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.mode == _CollectorV2Mode.product ? 'Lendo anúncio na Shopee' : 'Buscando concorrentes'),
         actions: [IconButton(onPressed: _run, icon: const Icon(Icons.refresh))],
       ),
-      body: Column(children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          color: blocked ? Theme.of(context).colorScheme.errorContainer : Theme.of(context).colorScheme.primaryContainer,
-          child: Row(children: [
-            if (loading || running) ...[
-              const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)),
-              const SizedBox(width: 10),
-            ],
-            Expanded(child: Text(status, style: const TextStyle(fontWeight: FontWeight.w700))),
-            if (blocked) ...[
-              const SizedBox(width: 8),
-              OutlinedButton(onPressed: _fitAndCenterVerification, child: const Text('Centralizar')),
-              const SizedBox(width: 6),
-              FilledButton(onPressed: _run, child: const Text('Continuar')),
-            ],
-          ]),
-        ),
-        Expanded(child: WebViewWidget(controller: controller)),
-      ]),
+      body: Stack(
+        children: [
+          Positioned.fill(child: WebViewWidget(controller: controller)),
+          if (blocked)
+            Positioned(
+              left: 8,
+              right: 8,
+              top: 8,
+              child: SafeArea(
+                child: Card(
+                  elevation: 8,
+                  child: Padding(
+                    padding: const EdgeInsets.all(13),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      const Row(children: [
+                        Icon(Icons.verified_user_outlined, color: kOrange),
+                        SizedBox(width: 8),
+                        Expanded(child: Text('Resolva o CAPTCHA para continuar', style: TextStyle(fontWeight: FontWeight.w900))),
+                      ]),
+                      const SizedBox(height: 5),
+                      const Text('Conclua a verificação da Shopee abaixo. Quando ela desaparecer, a coleta continuará automaticamente.'),
+                      const SizedBox(height: 8),
+                      SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: _focusChallengeOnce, icon: const Icon(Icons.center_focus_strong), label: const Text('Centralizar desafio'))),
+                    ]),
+                  ),
+                ),
+              ),
+            ),
+          if (showWorkOverlay)
+            Positioned.fill(
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                  child: ColoredBox(
+                    color: Theme.of(context).scaffoldBackgroundColor.withOpacity(.92),
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(30),
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          const SaShield(size: 72),
+                          const SizedBox(height: 18),
+                          Text(widget.mode == _CollectorV2Mode.product ? 'Coletando informações do anúncio' : 'Buscando concorrentes', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900), textAlign: TextAlign.center),
+                          const SizedBox(height: 10),
+                          Text(status, textAlign: TextAlign.center),
+                          const SizedBox(height: 18),
+                          if (widget.mode == _CollectorV2Mode.product) ...[
+                            LinearProgressIndicator(value: progress.clamp(0, 1), minHeight: 10, borderRadius: BorderRadius.circular(12)),
+                            const SizedBox(height: 9),
+                            Text('${(progress * 100).round()}%', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                          ] else
+                            const CircularProgressIndicator(),
+                        ]),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          if (loading && !blocked && !running)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Theme.of(context).scaffoldBackgroundColor.withOpacity(.94),
+                child: const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [CircularProgressIndicator(), SizedBox(height: 14), Text('Abrindo a Shopee...')])),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
