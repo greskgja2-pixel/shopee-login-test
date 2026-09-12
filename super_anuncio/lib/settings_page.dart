@@ -73,7 +73,7 @@ class SettingsPage extends StatelessWidget {
         const SizedBox(height: 12),
         const NoticeBox(icon: Icons.security_outlined, text: 'O login acontece dentro do site oficial da Shopee em uma WebView. O Super Anúncio não recebe nem armazena sua senha; ele apenas reutiliza a sessão/cookies salvos no aparelho.'),
         const SizedBox(height: 12),
-        const NoticeBox(icon: Icons.psychology_outlined, text: 'A auditoria inteligente usa a Gemini pelo backend do Super Anúncio. A chave da IA fica protegida no servidor e não é gravada dentro do APK.'),
+        const NoticeBox(icon: Icons.psychology_outlined, text: 'A auditoria inteligente é processada pelos sistemas do Super Anúncio. As credenciais e integrações ficam protegidas no servidor e não são gravadas dentro do APK.'),
       ]),
     );
   }
