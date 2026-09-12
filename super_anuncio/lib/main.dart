@@ -33,6 +33,7 @@ part 'gemini_service.dart';
 part 'engine.dart';
 part 'app_store.dart';
 part 'expert_tips.dart';
+part 'roas_strategy.dart';
 part 'pdf_exporter.dart';
 part 'minigame_page.dart';
 part 'competitor_widgets.dart';
