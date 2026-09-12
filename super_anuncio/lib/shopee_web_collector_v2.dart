@@ -119,6 +119,8 @@ class _ShopeeCollectorV2PageState extends State<_ShopeeCollectorV2Page> {
   bool running = false;
   bool blocked = false;
   int redirects = 0;
+  int clearChallengeChecks = 0;
+  Timer? verificationWatcher;
   String status = 'Abrindo a Shopee...';
 
   @override
@@ -133,15 +135,18 @@ class _ShopeeCollectorV2PageState extends State<_ShopeeCollectorV2Page> {
         onNavigationRequest: _navigation,
         onPageStarted: (_) {
           if (!mounted) return;
+          verificationWatcher?.cancel();
           setState(() {
             loading = true;
             running = false;
+            blocked = false;
             status = 'Carregando página da Shopee...';
           });
         },
         onPageFinished: (_) {
           if (!mounted) return;
           setState(() => loading = false);
+          _fitPageToScreen();
           Future.delayed(const Duration(milliseconds: 1100), _run);
         },
         onWebResourceError: (error) {
@@ -155,6 +160,12 @@ class _ShopeeCollectorV2PageState extends State<_ShopeeCollectorV2Page> {
         },
       ))
       ..loadRequest(Uri.parse(widget.targetUrl));
+  }
+
+  @override
+  void dispose() {
+    verificationWatcher?.cancel();
+    super.dispose();
   }
 
   NavigationDecision _navigation(NavigationRequest request) {
@@ -235,8 +246,10 @@ class _ShopeeCollectorV2PageState extends State<_ShopeeCollectorV2Page> {
       setState(() {
         blocked = true;
         running = false;
-        status = 'A Shopee pediu login ou verificação. Conclua abaixo e toque em Continuar.';
+        status = 'Verifique para continuar na Shopee. Responda ao desafio abaixo.';
       });
+      _fitAndCenterVerification();
+      _startVerificationWatcher();
       return;
     }
     if (type == 'navigate') {
@@ -257,11 +270,13 @@ class _ShopeeCollectorV2PageState extends State<_ShopeeCollectorV2Page> {
       return;
     }
     if (type == 'product') {
+      verificationWatcher?.cancel();
       final data = m['data'];
       if (data is Map) Navigator.pop(context, Map<String, dynamic>.from(data));
       return;
     }
     if (type == 'search') {
+      verificationWatcher?.cancel();
       Navigator.pop(context, List<dynamic>.from(m['items'] as List? ?? const []));
       return;
     }
@@ -271,6 +286,47 @@ class _ShopeeCollectorV2PageState extends State<_ShopeeCollectorV2Page> {
         status = '${m['message'] ?? 'Não consegui identificar o produto real.'}';
       });
     }
+  }
+
+  Future<void> _fitPageToScreen() async {
+    try {
+      await controller.runJavaScript(_fitPageScript);
+    } catch (_) {}
+  }
+
+  Future<void> _fitAndCenterVerification() async {
+    try {
+      await controller.runJavaScript(_centerVerificationScript);
+    } catch (_) {}
+  }
+
+  void _startVerificationWatcher() {
+    verificationWatcher?.cancel();
+    clearChallengeChecks = 0;
+    verificationWatcher = Timer.periodic(const Duration(milliseconds: 900), (_) async {
+      if (!mounted || !blocked) return;
+      try {
+        final raw = await controller.runJavaScriptReturningResult(_challengeStateScript);
+        final text = raw.toString().toLowerCase();
+        final hasChallenge = text.contains('true');
+        if (hasChallenge) {
+          clearChallengeChecks = 0;
+          await _fitAndCenterVerification();
+        } else {
+          clearChallengeChecks++;
+          if (clearChallengeChecks >= 2) {
+            verificationWatcher?.cancel();
+            if (!mounted) return;
+            setState(() {
+              blocked = false;
+              status = 'Verificação concluída. Continuando...';
+            });
+            await Future.delayed(const Duration(milliseconds: 500));
+            _run();
+          }
+        }
+      } catch (_) {}
+    });
   }
 
   Future<void> _run() async {
@@ -289,6 +345,77 @@ class _ShopeeCollectorV2PageState extends State<_ShopeeCollectorV2Page> {
     }
   }
 
+  static const String _fitPageScript = r'''
+(() => {
+  let meta=document.querySelector('meta[name="viewport"]');
+  if(!meta){meta=document.createElement('meta');meta.name='viewport';document.head?.appendChild(meta);}
+  meta.setAttribute('content','width=device-width, initial-scale=1.0, minimum-scale=0.3, maximum-scale=3.0, user-scalable=yes');
+  const pageWidth=Math.max(document.documentElement?.scrollWidth||0,document.body?.scrollWidth||0,1100);
+  const scale=Math.max(.40,Math.min(.62,(innerWidth/pageWidth)*1.02));
+  if(document.body){document.body.style.zoom=String(scale);document.body.style.transformOrigin='top left';}
+  document.documentElement.style.overflowX='auto';
+  window.scrollTo({left:0,top:0,behavior:'auto'});
+  return true;
+})();
+''';
+
+  static const String _challengeStateScript = r'''
+(() => {
+  const body=(document.body?.innerText||'').toLowerCase();
+  const exact=/verifique\s+para\s+continuar|arraste\s+para\s+completar\s+o\s+quebra-cabe[cç]a|verifica[cç][aã]o\s+de\s+seguran[cç]a|deslize\s+para\s+completar|tente\s+novamente/;
+  const sel='iframe[src*="captcha" i],iframe[src*="verify" i],iframe[src*="challenge" i],[class*="captcha" i],[id*="captcha" i],[class*="verify" i],[id*="verify" i],[class*="challenge" i],[id*="challenge" i]';
+  return exact.test(body)||!!document.querySelector(sel)||/captcha|verify|challenge|traffic/.test(location.href.toLowerCase());
+})();
+''';
+
+  static const String _centerVerificationScript = r'''
+(() => {
+  const norm=s=>String(s||'').toLowerCase().replace(/\s+/g,' ').trim();
+  let meta=document.querySelector('meta[name="viewport"]');
+  if(!meta){meta=document.createElement('meta');meta.name='viewport';document.head?.appendChild(meta);}
+  meta.setAttribute('content','width=device-width, initial-scale=1.0, minimum-scale=0.3, maximum-scale=3.0, user-scalable=yes');
+  const pageWidth=Math.max(document.documentElement?.scrollWidth||0,document.body?.scrollWidth||0,1100);
+  const scale=Math.max(.40,Math.min(.58,(innerWidth/pageWidth)*1.02));
+  if(document.body){document.body.style.zoom=String(scale);document.body.style.transformOrigin='top left';}
+  document.documentElement.style.overflowX='auto';
+
+  const exact=/verifique para continuar|arraste para completar o quebra-cabe[cç]a|verifica[cç][aã]o de seguran[cç]a|deslize para completar|tente novamente/;
+  const visible=el=>{if(!el)return false;const s=getComputedStyle(el),r=el.getBoundingClientRect();return s.display!=='none'&&s.visibility!=='hidden'&&r.width>70&&r.height>30;};
+  let matches=[];
+  for(const el of document.querySelectorAll('main,section,article,div,h1,h2,h3,h4,p,span')){
+    if(!visible(el))continue;
+    const t=norm(el.innerText||el.textContent||'');
+    if(t&&t.length<1800&&exact.test(t)){
+      const r=el.getBoundingClientRect();
+      matches.push({el,area:r.width*r.height});
+    }
+  }
+  matches.sort((a,b)=>a.area-b.area);
+  let target=matches[0]?.el||null;
+  if(!target){
+    const sels=['iframe[src*="captcha" i]','iframe[src*="verify" i]','iframe[src*="challenge" i]','[class*="captcha" i]','[id*="captcha" i]','[class*="verify" i]','[id*="verify" i]','[class*="challenge" i]','[id*="challenge" i]'];
+    for(const s of sels){const e=document.querySelector(s);if(visible(e)){target=e;break;}}
+  }
+  if(!target){
+    const frames=[...document.querySelectorAll('iframe')].filter(visible);
+    target=frames.sort((a,b)=>{const ra=a.getBoundingClientRect(),rb=b.getBoundingClientRect();return (rb.width*rb.height)-(ra.width*ra.height);})[0]||null;
+  }
+  if(target){
+    target.scrollIntoView({behavior:'auto',block:'center',inline:'center'});
+    setTimeout(()=>{
+      const r=target.getBoundingClientRect();
+      const left=Math.max(0,window.scrollX+r.left-(innerWidth-r.width)/2);
+      const top=Math.max(0,window.scrollY+r.top-(innerHeight-r.height)/2);
+      window.scrollTo({left,top,behavior:'smooth'});
+    },120);
+  }else{
+    const left=Math.max(0,(document.documentElement.scrollWidth-innerWidth)/2);
+    window.scrollTo({left,top:Math.max(0,document.documentElement.scrollHeight*.12),behavior:'smooth'});
+  }
+  return true;
+})();
+''';
+
   String get _common => r'''
 const SA2={
  post:x=>SuperAnuncioV2.postMessage(JSON.stringify(x)),
@@ -296,7 +423,8 @@ const SA2={
  blocked:()=>{
    const u=location.href.toLowerCase();
    const b=String(document.body?.innerText||'').toLowerCase();
-   return /captcha|verify|traffic/.test(u)||!!document.querySelector('iframe[src*="captcha" i],[class*="captcha" i],[id*="captcha" i]')||(!!document.querySelector('input[type="password"]')&&/entrar|login|senha/.test(b.slice(0,2000)));
+   const exact=/verifique\s+para\s+continuar|arraste\s+para\s+completar\s+o\s+quebra-cabe[cç]a|verifica[cç][aã]o\s+de\s+seguran[cç]a|deslize\s+para\s+completar|tente\s+novamente/;
+   return exact.test(b)||/captcha|verify|traffic|challenge/.test(u)||!!document.querySelector('iframe[src*="captcha" i],iframe[src*="verify" i],iframe[src*="challenge" i],[class*="captcha" i],[id*="captcha" i],[class*="verify" i],[id*="verify" i],[class*="challenge" i],[id*="challenge" i]')||(!!document.querySelector('input[type="password"]')&&/entrar|login|senha/.test(b.slice(0,2000)));
  },
  decode:s=>{let x=String(s||'');for(let i=0;i<4;i++){try{const y=decodeURIComponent(x);if(y===x)break;x=y}catch(_){break}}return x},
  idsFrom:s=>{
@@ -428,7 +556,12 @@ const SA2={
               const SizedBox(width: 10),
             ],
             Expanded(child: Text(status, style: const TextStyle(fontWeight: FontWeight.w700))),
-            if (blocked) FilledButton(onPressed: _run, child: const Text('Continuar')),
+            if (blocked) ...[
+              const SizedBox(width: 8),
+              OutlinedButton(onPressed: _fitAndCenterVerification, child: const Text('Centralizar')),
+              const SizedBox(width: 6),
+              FilledButton(onPressed: _run, child: const Text('Continuar')),
+            ],
           ]),
         ),
         Expanded(child: WebViewWidget(controller: controller)),
