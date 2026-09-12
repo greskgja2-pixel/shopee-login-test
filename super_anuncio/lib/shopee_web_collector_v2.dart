@@ -25,6 +25,12 @@ class ShopeeWebCollectorV2 {
       imageUrls: imageUrls,
       price: _d(raw['price']),
       priceBeforeDiscount: _d(raw['priceBeforeDiscount']),
+      priceMin: _d(raw['priceMin']),
+      priceMax: _d(raw['priceMax']),
+      bestSellingVariationName: _s(raw['bestSellingVariationName']),
+      bestSellingVariationPrice: _d(raw['bestSellingVariationPrice']),
+      bestSellingVariationSold: _i(raw['bestSellingVariationSold']),
+      priceBasis: _s(raw['priceBasis']),
       rating: _d(raw['rating']),
       reviewCount: _i(raw['reviewCount']),
       sold: _i(raw['sold']),
@@ -67,6 +73,12 @@ class ShopeeWebCollectorV2 {
       out.add(CompetitorCandidate(
         title: t,
         price: _d(m['price']),
+        priceMin: _d(m['priceMin']),
+        priceMax: _d(m['priceMax']),
+        bestSellingVariationName: _s(m['bestSellingVariationName']),
+        bestSellingVariationPrice: _d(m['bestSellingVariationPrice']),
+        bestSellingVariationSold: _d(m['bestSellingVariationSold']),
+        priceBasis: _s(m['priceBasis']),
         link: link,
         imageUrl: _s(m['imageUrl']),
         rating: _d(m['rating']),
@@ -441,6 +453,49 @@ const SA2={
  price:v=>{const n=Number(v);if(!Number.isFinite(n)||n<=0)return null;return n>10000?n/100000:n;},
  img:k=>!k?null:(String(k).startsWith('http')?String(k):'https://down-br.img.susercontent.com/file/'+k),
  cat:item=>{const a=item?.fe_categories||item?.categories||[];if(!Array.isArray(a))return String(item?.category_name||item?.category||'');return a.map(x=>x?.display_name||x?.name||x?.catname).filter(Boolean).join(' > ');},
+ modelPrice:m=>SA2.price(m?.price??m?.current_price??m?.promotion_price??m?.price_stocks?.[0]?.current_price??m?.price_stocks?.[0]?.promotion_price),
+ modelSold:m=>{
+   const values=[m?.sold,m?.historical_sold,m?.global_sold_count,m?.sold_count,m?.model_sold,m?.sales,m?.order_count,m?.orders];
+   for(const v of values){const n=Number(v);if(Number.isFinite(n)&&n>=0)return n;}
+   return null;
+ },
+ modelName:(m,item,index)=>{
+   const direct=SA2.clean(m?.name||m?.model_name||m?.variation_name||m?.display_name||'');
+   if(direct)return direct;
+   const indexes=Array.isArray(m?.extinfo?.tier_index)?m.extinfo.tier_index:Array.isArray(m?.tier_index)?m.tier_index:[];
+   const tiers=Array.isArray(item?.tier_variations)?item.tier_variations:[];
+   const bits=[];
+   for(let i=0;i<indexes.length;i++){
+     const opts=Array.isArray(tiers[i]?.options)?tiers[i].options:[];
+     const val=opts[Number(indexes[i])];if(val!=null)bits.push(String(val));
+   }
+   return bits.length?bits.join(' / '):'Variação '+(index+1);
+ },
+ pricing:item=>{
+   const models=Array.isArray(item?.models)?item.models:[];
+   const rows=[];
+   for(let i=0;i<models.length;i++){
+     const m=models[i],price=SA2.modelPrice(m);if(!(price>0))continue;
+     rows.push({name:SA2.modelName(m,item,i),price,sold:SA2.modelSold(m)});
+   }
+   const prices=rows.map(x=>x.price).filter(x=>x>0);
+   const itemMin=SA2.price(item?.price_min??item?.price);
+   const itemMax=SA2.price(item?.price_max??item?.price);
+   const priceMin=prices.length?Math.min(...prices):itemMin;
+   const priceMax=prices.length?Math.max(...prices):itemMax;
+   const soldRows=rows.filter(x=>Number.isFinite(x.sold)&&x.sold>0).sort((a,b)=>b.sold-a.sold);
+   const leader=soldRows[0]||null;
+   const fallback=SA2.price(item?.price??item?.price_min??item?.current_price)??priceMin;
+   return {
+     analysisPrice:leader?.price??fallback,
+     priceMin:priceMin??fallback,
+     priceMax:priceMax??fallback,
+     bestSellingVariationName:leader?.name??null,
+     bestSellingVariationPrice:leader?.price??null,
+     bestSellingVariationSold:leader?.sold??null,
+     priceBasis:leader?'best_selling_variation':(models.length?'variation_fallback':'item_price')
+   };
+ },
  detail:async ids=>{
    try{
      const p='/api/v4/item/get?itemid='+encodeURIComponent(ids.itemId)+'&shopid='+encodeURIComponent(ids.shopId);
@@ -454,7 +509,8 @@ const SA2={
    const rating=Number(item?.item_rating?.rating_star??item?.rating_star);
    const models=Array.isArray(item?.models)?item.models:[];
    const tiers=Array.isArray(item?.tier_variations)?item.tier_variations:[];
-   return {url:location.href,shopId:String(ids.shopId),itemId:String(ids.itemId),title:String(item?.name||item?.title||''),description:String(item?.description||''),category:SA2.cat(item),imageUrl:SA2.img(item?.image||item?.image_id||images[0]),imageUrls,price:SA2.price(item?.price??item?.price_min??item?.current_price),priceBeforeDiscount:SA2.price(item?.price_before_discount??item?.price_min_before_discount),rating:Number.isFinite(rating)?rating:null,reviewCount:Number(item?.cmt_count??item?.rating_count??item?.review_count)||null,sold:Number(item?.sold??item?.historical_sold??item?.global_sold_count)||null,stock:Number(item?.stock)||null,imageCount:images.length,hasVideo:(Array.isArray(item?.video_info_list)&&item.video_info_list.length>0)||!!item?.video_info,attributesCount:Array.isArray(item?.attributes)?item.attributes.length:0,variationCount:models.length||tiers.length};
+   const pricing=SA2.pricing(item);
+   return {url:location.href,shopId:String(ids.shopId),itemId:String(ids.itemId),title:String(item?.name||item?.title||''),description:String(item?.description||''),category:SA2.cat(item),imageUrl:SA2.img(item?.image||item?.image_id||images[0]),imageUrls,price:pricing.analysisPrice,priceBeforeDiscount:SA2.price(item?.price_before_discount??item?.price_min_before_discount),priceMin:pricing.priceMin,priceMax:pricing.priceMax,bestSellingVariationName:pricing.bestSellingVariationName,bestSellingVariationPrice:pricing.bestSellingVariationPrice,bestSellingVariationSold:pricing.bestSellingVariationSold,priceBasis:pricing.priceBasis,rating:Number.isFinite(rating)?rating:null,reviewCount:Number(item?.cmt_count??item?.rating_count??item?.review_count)||null,sold:Number(item?.sold??item?.historical_sold??item?.global_sold_count)||null,stock:Number(item?.stock)||null,imageCount:images.length,hasVideo:(Array.isArray(item?.video_info_list)&&item.video_info_list.length>0)||!!item?.video_info,attributesCount:Array.isArray(item?.attributes)?item.attributes.length:0,variationCount:models.length||tiers.length};
  }
 };
 ''';
@@ -473,7 +529,7 @@ const SA2={
        if(item&&String(item?.name||'').trim().length>3){
          SA2.post({type:'progress',percent:64,message:'Coletando imagens, avaliações e variações...'});
          await new Promise(r=>setTimeout(r,120));
-         SA2.post({type:'progress',percent:86,message:'Validando as informações coletadas...'});
+         SA2.post({type:'progress',percent:86,message:'Validando preços e variações...'});
          await new Promise(r=>setTimeout(r,120));
          SA2.post({type:'progress',percent:100,message:'Coleta concluída'});
          SA2.post({type:'product',data:SA2.product(item,ids)});return true;
@@ -505,7 +561,7 @@ const SA2={
      if(title.length<4)title=raw.split(/R\$/)[0].slice(0,220);
      const pm=raw.match(/R\$\s*([0-9][0-9.]*(?:,[0-9]{1,2})?)/);const price=pm?Number(pm[1].replace(/\./g,'').replace(',','.')):null;
      if(title.length<4||!(price>0))continue;
-     if(!out.has(ids.itemId))out.set(ids.itemId,{title,price,link:a.href,imageUrl:img?.currentSrc||img?.src||null,rating:null,sold:sold(raw),shopId:ids.shopId,itemId:ids.itemId,description:'',category:''});
+     if(!out.has(ids.itemId))out.set(ids.itemId,{title,price,priceMin:price,priceMax:price,bestSellingVariationName:null,bestSellingVariationPrice:null,bestSellingVariationSold:null,priceBasis:'search_card',link:a.href,imageUrl:img?.currentSrc||img?.src||null,rating:null,sold:sold(raw),shopId:ids.shopId,itemId:ids.itemId,description:'',category:''});
      if(out.size>=20)break;
    }
    return [...out.values()];
@@ -520,7 +576,20 @@ const SA2={
    items=parse();
    for(let i=0;i<Math.min(items.length,15);i++){
      const x=items[i],d=await SA2.detail({shopId:x.shopId,itemId:x.itemId});if(!d)continue;
-     x.title=String(d?.name||x.title);x.description=String(d?.description||'');x.category=SA2.cat(d);x.rating=Number(d?.item_rating?.rating_star??d?.rating_star)||null;x.sold=Number(d?.sold??d?.historical_sold??d?.global_sold_count)||x.sold;x.price=SA2.price(d?.price??d?.price_min)||x.price;x.imageUrl=SA2.img(d?.image||d?.image_id)||x.imageUrl;
+     const pricing=SA2.pricing(d);
+     x.title=String(d?.name||x.title);
+     x.description=String(d?.description||'');
+     x.category=SA2.cat(d);
+     x.rating=Number(d?.item_rating?.rating_star??d?.rating_star)||null;
+     x.sold=Number(d?.sold??d?.historical_sold??d?.global_sold_count)||x.sold;
+     x.price=pricing.analysisPrice||x.price;
+     x.priceMin=pricing.priceMin||x.priceMin;
+     x.priceMax=pricing.priceMax||x.priceMax;
+     x.bestSellingVariationName=pricing.bestSellingVariationName;
+     x.bestSellingVariationPrice=pricing.bestSellingVariationPrice;
+     x.bestSellingVariationSold=pricing.bestSellingVariationSold;
+     x.priceBasis=pricing.priceBasis;
+     x.imageUrl=SA2.img(d?.image||d?.image_id)||x.imageUrl;
    }
    SA2.post({type:'search',items});
  }catch(e){SA2.post({type:'error',message:String(e?.message||e)})}
