@@ -9,11 +9,20 @@ new = r'''  Future<String?> _createShareImage({AchievementDef? achievement}) asy
       if (cache == null || cache.isEmpty) return null;
       const width = 1080.0;
       const height = 1350.0;
-      final bytes = await rootBundle.load('assets/achievement_template.jpg');
-      final template = await ui.decodeImageFromList(bytes.buffer.asUint8List());
+
+      final raw = await rootBundle.loadString('assets/achievement_template.b64');
+      final cleaned = raw.replaceAll(RegExp(r'[^A-Za-z0-9+/=]'), '');
+      final templateBytes = base64Decode(base64.normalize(cleaned));
+      final template = await ui.decodeImageFromList(templateBytes);
+
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
-      canvas.drawImageRect(template, Rect.fromLTWH(0, 0, template.width.toDouble(), template.height.toDouble()), const Rect.fromLTWH(0, 0, width, height), Paint()..filterQuality = FilterQuality.high);
+      canvas.drawImageRect(
+        template,
+        Rect.fromLTWH(0, 0, template.width.toDouble(), template.height.toDouble()),
+        const Rect.fromLTWH(0, 0, width, height),
+        Paint()..filterQuality = FilterQuality.high,
+      );
 
       void text(String value, double y, double size, FontWeight weight, Color color, {double maxWidth = 850, int maxLines = 3}) {
         final tp = TextPainter(
