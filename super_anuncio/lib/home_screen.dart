@@ -182,10 +182,6 @@ class _HomePageState extends State<HomePage> {
     if (fresh.isEmpty) return;
     setState(() => appState.unlockedAchievements.addAll(ids));
     _persist();
-    if (mounted) {
-      final names = SecretAchievementEngine.all.where((a) => fresh.contains(a.id)).map((a) => a.title).join(', ');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Conquista secreta: $names')));
-    }
   }
 
   void _openGame() {
