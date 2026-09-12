@@ -74,6 +74,23 @@ class SettingsPage extends StatelessWidget {
         const NoticeBox(icon: Icons.security_outlined, text: 'O login acontece dentro do site oficial da Shopee em uma WebView. O Super Anúncio não recebe nem armazena sua senha; ele apenas reutiliza a sessão/cookies salvos no aparelho.'),
         const SizedBox(height: 12),
         const NoticeBox(icon: Icons.psychology_outlined, text: 'A auditoria inteligente é processada pelos sistemas do Super Anúncio. As credenciais e integrações ficam protegidas no servidor e não são gravadas dentro do APK.'),
+        const SizedBox(height: 20),
+        Card(
+          color: cs.primaryContainer.withOpacity(.22),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+            child: Column(children: [
+              SaShield(size: 54),
+              SizedBox(height: 10),
+              Text('By Gresk 2026', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+              SizedBox(height: 8),
+              Text('Que Deus e família seja sua prioridade.', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700)),
+              SizedBox(height: 3),
+              Text('Gresk 2026', style: TextStyle(fontWeight: FontWeight.w700)),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 18),
       ]),
     );
   }
