@@ -30,6 +30,15 @@ class CompetitorCard extends StatelessWidget {
               Text(candidate.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
               const SizedBox(height: 5),
               if (candidate.price != null) Text(money(candidate.price!), style: TextStyle(color: cs.primary, fontWeight: FontWeight.w900, fontSize: 16)),
+              if (candidate.bestSellingVariationPrice != null)
+                Text(
+                  'Variação líder${candidate.bestSellingVariationName == null ? '' : ': ${candidate.bestSellingVariationName}'}${candidate.bestSellingVariationSold == null ? '' : ' • ${candidate.bestSellingVariationSold!.round()} vendidos'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              if (candidate.priceMin != null && candidate.priceMax != null && candidate.priceMin != candidate.priceMax)
+                Text('Faixa ${money(candidate.priceMin!)} - ${money(candidate.priceMax!)}', style: Theme.of(context).textTheme.bodySmall),
               if (candidate.rating != null) Text('⭐ ${candidate.rating!.toStringAsFixed(1)}${candidate.sold == null ? '' : '  •  ${candidate.sold!.toInt()} vendidos'}', style: Theme.of(context).textTheme.bodySmall),
             ])),
             Checkbox(value: selected, onChanged: (v) => onChanged(v ?? false)),
@@ -54,6 +63,7 @@ class AutoFacts extends StatelessWidget {
       if (product.sold != null) '${product.sold} vendidos',
       if (product.stock != null) 'Estoque ${product.stock}',
       if (product.variationCount > 0) '${product.variationCount} variações',
+      if (product.bestSellingVariationPrice != null) 'Preço pela variação líder',
     ];
     return Wrap(spacing: 8, runSpacing: 8, children: facts.map((e) => Chip(label: Text(e))).toList());
   }
@@ -153,16 +163,29 @@ class CompetitiveSummary extends StatelessWidget {
     final comps = result.competitors;
     final averageRating = average(comps.map((e) => e.rating).whereType<double>());
     final recurring = recurringTerms(result.input.title, comps);
+    final p = result.input.product;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Row(children: [Icon(Icons.groups_outlined), SizedBox(width: 8), Text('Comparação com concorrentes', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18))]),
           const SizedBox(height: 12),
+          if (p?.bestSellingVariationPrice != null) ...[
+            Text(
+              'Preço do seu anúncio usado na comparação: ${money(p!.bestSellingVariationPrice!)}${p.bestSellingVariationName == null ? '' : ' (${p.bestSellingVariationName})'}.',
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 7),
+          ],
           Text(result.priceInsight),
           if (result.competitorMedian != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Mediana de preço: ${money(result.competitorMedian!)}', style: const TextStyle(fontWeight: FontWeight.w800))),
           if (averageRating != null) Padding(padding: const EdgeInsets.only(top: 5), child: Text('Média de avaliação dos selecionados: ${averageRating.toStringAsFixed(2)}')),
           if (recurring.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 5), child: Text('Termos recorrentes: ${recurring.join(', ')}')),
+          if (comps.any((c) => c.bestSellingVariationPrice != null))
+            const Padding(
+              padding: EdgeInsets.only(top: 7),
+              child: Text('Nos concorrentes em que a Shopee informou vendas por variação, a comparação também usa a variação líder.', style: TextStyle(fontWeight: FontWeight.w600)),
+            ),
           if (comps.isEmpty) const Padding(padding: EdgeInsets.only(top: 8), child: Text('Nenhum concorrente foi selecionado; essa parte da auditoria fica menos precisa.')),
         ]),
       ),
@@ -177,15 +200,58 @@ class AdsSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ads = result.dimensions.firstWhere((d) => d.name == 'Ads e eficiência');
+    final input = result.input;
+    final advice = buildRoasStrategy(input);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Row(children: [Icon(Icons.campaign_outlined), SizedBox(width: 8), Text('Ads — últimos 7 dias', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18))]),
+          const SizedBox(height: 12),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            if (input.roas7d != null) Chip(label: Text('ROAS ${input.roas7d!.toStringAsFixed(2)}')),
+            if (input.roasTarget != null) Chip(label: Text('ROAS alvo ${input.roasTarget!.toStringAsFixed(2)}')),
+            if (input.adsSpend7d != null) Chip(label: Text('Gasto ${money(input.adsSpend7d!)}')),
+            if (input.productCost != null) Chip(label: Text('Custo ${money(input.productCost!)}')),
+          ]),
           const SizedBox(height: 10),
           Text(ads.reason),
           const SizedBox(height: 6),
           Text(ads.action, style: const TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer.withOpacity(.35),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                const Icon(Icons.auto_graph_outlined),
+                const SizedBox(width: 8),
+                Expanded(child: Text(advice.title, style: const TextStyle(fontWeight: FontWeight.w900))),
+              ]),
+              const SizedBox(height: 7),
+              Text(advice.message),
+              if (advice.grossMarginPct != null) ...[
+                const SizedBox(height: 8),
+                Text('Margem bruta preliminar pelo custo informado: ${advice.grossMarginPct!.toStringAsFixed(1)}%', style: const TextStyle(fontWeight: FontWeight.w800)),
+              ],
+              if (advice.preliminaryBreakEvenRoas != null)
+                Text('ROAS de equilíbrio preliminar: ${advice.preliminaryBreakEvenRoas!.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w800)),
+              if (advice.suggestedTarget != null) ...[
+                const SizedBox(height: 6),
+                Text('Teste de Meta de ROAS sugerido: cerca de ${advice.suggestedTarget!.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w900)),
+              ],
+              if (input.productCost != null) ...[
+                const SizedBox(height: 7),
+                const Text('Estimativa preliminar: taxas da plataforma, impostos, frete, embalagem e outros custos variáveis podem aumentar o ROAS mínimo real.', style: TextStyle(fontSize: 12)),
+              ],
+            ]),
+          ),
+          const SizedBox(height: 9),
+          Text('Orientação baseada em boas práticas oficiais da Shopee Ads para Meta de ROAS e GMV Max. Mudanças devem ser graduais e avaliadas por vários dias.', style: Theme.of(context).textTheme.bodySmall),
         ]),
       ),
     );
