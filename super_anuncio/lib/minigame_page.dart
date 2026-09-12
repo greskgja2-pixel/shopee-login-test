@@ -60,7 +60,12 @@ class _SaArcadePageState extends State<SaArcadePage> {
     if (tick % 15 == 0) _shootAuto();
 
     if (tick % 44 == 0) {
-      enemies.add(_ArcadeEnemy(x: .08 + rng.nextDouble() * .84, y: -.06, speed: .0024 + rng.nextDouble() * .0022));
+      enemies.add(_ArcadeEnemy(
+        x: .08 + rng.nextDouble() * .84,
+        y: -.06,
+        speed: .0024 + rng.nextDouble() * .0022,
+        emoji: rng.nextBool() ? '🥚' : '🐙',
+      ));
     }
 
     for (final b in bullets) {
@@ -107,7 +112,6 @@ class _SaArcadePageState extends State<SaArcadePage> {
   void _shootAuto() {
     if (gameOver) return;
     bullets.add(_ArcadeBullet(x: shipX, y: .82));
-    // Mantém o efeito presente sem transformar a rajada automática em ruído contínuo.
     if (!muted && tick % 30 == 0) audio.shot();
   }
 
@@ -197,7 +201,7 @@ class _SaArcadePageState extends State<SaArcadePage> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(color: Colors.black.withOpacity(.35), borderRadius: BorderRadius.circular(18)),
-                  child: Text('Arraste para mover • tiros automáticos', textAlign: TextAlign.center, style: TextStyle(color: Colors.white.withOpacity(.82), fontWeight: FontWeight.w800)),
+                  child: Text('Arraste para mover • tiros automáticos • acerte 🥚 e 🐙', textAlign: TextAlign.center, style: TextStyle(color: Colors.white.withOpacity(.82), fontWeight: FontWeight.w800)),
                 ),
               ),
               if (gameOver)
@@ -254,8 +258,9 @@ class _ArcadeEnemy {
   double x;
   double y;
   final double speed;
+  final String emoji;
   final double seed = math.Random().nextDouble() * 1000;
-  _ArcadeEnemy({required this.x, required this.y, required this.speed});
+  _ArcadeEnemy({required this.x, required this.y, required this.speed, required this.emoji});
 }
 
 class _ArcadePainter extends CustomPainter {
@@ -298,10 +303,10 @@ class _ArcadePainter extends CustomPainter {
 
     for (final e in enemies) {
       final center = Offset(e.x * size.width, e.y * size.height);
-      canvas.drawCircle(center, 19, Paint()..color = const Color(0xFF8E44AD));
-      canvas.drawRect(Rect.fromCenter(center: center, width: 30, height: 10), Paint()..color = Colors.redAccent);
+      final glow = Paint()..color = Colors.white.withOpacity(.08);
+      canvas.drawCircle(center, 24, glow);
       final tp = TextPainter(
-        text: const TextSpan(text: r'R$', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)),
+        text: TextSpan(text: e.emoji, style: const TextStyle(fontSize: 34)),
         textDirection: TextDirection.ltr,
       )..layout();
       tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
