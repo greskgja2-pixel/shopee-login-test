@@ -34,43 +34,118 @@ class _ResultPageState extends State<ResultPage> {
       const height = 1350.0;
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
-      final bg = Paint()..color = const Color(0xFFFFF5F0);
-      canvas.drawRect(const Rect.fromLTWH(0, 0, width, height), bg);
 
-      final orange = Paint()..color = kOrange;
-      canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(55, 55, 970, 1240), const Radius.circular(48)), orange);
-      final inner = Paint()..color = Colors.white;
-      canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(80, 80, 920, 1190), const Radius.circular(38)), inner);
+      final background = Paint()..color = const Color(0xFFFFF8F1);
+      canvas.drawRect(const Rect.fromLTWH(0, 0, width, height), background);
 
-      final gold = Paint()..color = const Color(0xFFFFC72C);
-      final darkGold = Paint()..color = const Color(0xFFC88700);
-      canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(390, 190, 300, 260), const Radius.circular(48)), gold);
-      canvas.drawCircle(const Offset(380, 300), 90, darkGold);
-      canvas.drawCircle(const Offset(700, 300), 90, darkGold);
-      canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(430, 420, 220, 55), const Radius.circular(20)), darkGold);
-      canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(360, 470, 360, 65), const Radius.circular(22)), gold);
-      final trend = Paint()..color = const Color(0xFF19A463)..strokeWidth = 24..style = PaintingStyle.stroke..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round;
-      final path = Path()..moveTo(430, 365)..lineTo(500, 315)..lineTo(565, 340)..lineTo(650, 245);
-      canvas.drawPath(path, trend);
-      canvas.drawLine(const Offset(650, 245), const Offset(650, 310), trend);
-      canvas.drawLine(const Offset(650, 245), const Offset(590, 250), trend);
+      final border = Paint()
+        ..color = kOrange
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 28;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(const Rect.fromLTWH(45, 45, 990, 1260), const Radius.circular(52)),
+        border,
+      );
 
-      void text(String value, double y, double size, FontWeight weight, Color color, {double maxWidth = 840, TextAlign align = TextAlign.center}) {
+      final innerGlow = Paint()
+        ..color = const Color(0xFFFFE7D6)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(const Rect.fromLTWH(75, 75, 930, 1200), const Radius.circular(42)),
+        innerGlow,
+      );
+
+      final gold = Paint()..color = const Color(0xFFFFB21A);
+      final darkGold = Paint()..color = const Color(0xFFC77D00);
+      final shield = Path()
+        ..moveTo(540, 185)
+        ..lineTo(690, 235)
+        ..lineTo(670, 430)
+        ..quadraticBezierTo(620, 505, 540, 545)
+        ..quadraticBezierTo(460, 505, 410, 430)
+        ..lineTo(390, 235)
+        ..close();
+      canvas.drawPath(shield, Paint()..color = const Color(0xFFCF3F08));
+      canvas.drawPath(
+        shield,
+        Paint()
+          ..color = gold.color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 18,
+      );
+
+      final crown = Path()
+        ..moveTo(455, 190)
+        ..lineTo(480, 125)
+        ..lineTo(525, 170)
+        ..lineTo(560, 105)
+        ..lineTo(600, 170)
+        ..lineTo(640, 125)
+        ..lineTo(665, 190)
+        ..close();
+      canvas.drawPath(crown, gold);
+      canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(460, 182, 200, 28), const Radius.circular(10)), darkGold);
+      for (final x in [480.0, 560.0, 640.0]) {
+        canvas.drawCircle(Offset(x, x == 560 ? 105 : 125), 12, gold);
+      }
+
+      for (var i = 0; i < 5; i++) {
+        final y = 265.0 + i * 48;
+        final leftLeaf = Path()
+          ..moveTo(330, y)
+          ..quadraticBezierTo(290, y - 22, 272, y + 8)
+          ..quadraticBezierTo(305, y + 32, 330, y)
+          ..close();
+        final rightLeaf = Path()
+          ..moveTo(750, y)
+          ..quadraticBezierTo(790, y - 22, 808, y + 8)
+          ..quadraticBezierTo(775, y + 32, 750, y)
+          ..close();
+        canvas.drawPath(leftLeaf, gold);
+        canvas.drawPath(rightLeaf, gold);
+      }
+
+      final ribbon = RRect.fromRectAndRadius(const Rect.fromLTWH(380, 500, 320, 62), const Radius.circular(16));
+      canvas.drawRRect(ribbon, gold);
+      canvas.drawCircle(const Offset(540, 531), 18, darkGold);
+
+      void text(
+        String value,
+        double y,
+        double size,
+        FontWeight weight,
+        Color color, {
+        double maxWidth = 860,
+        int maxLines = 4,
+      }) {
         final tp = TextPainter(
-          text: TextSpan(text: value, style: TextStyle(fontSize: size, fontWeight: weight, color: color, height: 1.15)),
+          text: TextSpan(text: value, style: TextStyle(fontSize: size, fontWeight: weight, color: color, height: 1.12)),
           textDirection: TextDirection.ltr,
-          textAlign: align,
-          maxLines: 4,
+          textAlign: TextAlign.center,
+          maxLines: maxLines,
+          ellipsis: '…',
         )..layout(maxWidth: maxWidth);
         tp.paint(canvas, Offset((width - tp.width) / 2, y));
       }
 
-      text('SUPER ANÚNCIO', 590, 58, FontWeight.w900, kOrange);
-      text('CONQUISTA DESBLOQUEADA', 680, 36, FontWeight.w900, const Color(0xFF1D1D1F));
-      text(achievement?.title ?? 'Anúncio em evolução', 750, 54, FontWeight.w900, const Color(0xFF1D1D1F));
-      text('Nota ${widget.result.score}/100', 860, 46, FontWeight.w800, kOrange);
-      text(widget.result.input.title, 945, 34, FontWeight.w700, const Color(0xFF444444), maxWidth: 820);
-      text('Analise. Otimize. Venda mais. 📈', 1160, 30, FontWeight.w700, const Color(0xFF666666));
+      text('SA', 275, 112, FontWeight.w900, const Color(0xFFFFF3D1), maxWidth: 300, maxLines: 1);
+      text('SUPER ANÚNCIO', 600, 58, FontWeight.w900, kOrange, maxLines: 1);
+      text('CONQUISTA DESBLOQUEADA', 674, 34, FontWeight.w800, const Color(0xFF262626), maxLines: 1);
+      text(achievement?.title ?? 'Anúncio em evolução', 780, 54, FontWeight.w900, const Color(0xFF171717), maxWidth: 850, maxLines: 2);
+
+      final scoreBox = Paint()..color = const Color(0xFFFFEADB);
+      canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(340, 895, 400, 76), const Radius.circular(38)), scoreBox);
+      text('Nota ${widget.result.score}/100', 906, 42, FontWeight.w900, const Color(0xFFE7470A), maxLines: 1);
+
+      text(widget.result.input.title, 1010, 30, FontWeight.w800, const Color(0xFF262626), maxWidth: 820, maxLines: 3);
+      text('Analise. Otimize. Venda mais.', 1132, 30, FontWeight.w600, const Color(0xFF5B5B5B), maxLines: 1);
+
+      final creditBg = Paint()..color = kOrange;
+      canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(405, 1192, 270, 54), const Radius.circular(27)), creditBg);
+      text('By Gresk 2026', 1200, 28, FontWeight.w700, Colors.white, maxWidth: 260, maxLines: 1);
+      text('Que Deus e família seja sua prioridade.', 1260, 20, FontWeight.w600, const Color(0xFF505050), maxWidth: 820, maxLines: 1);
+      text('Gresk 2026', 1290, 18, FontWeight.w600, const Color(0xFF6A6A6A), maxLines: 1);
 
       final picture = recorder.endRecording();
       final image = await picture.toImage(width.toInt(), height.toInt());
@@ -164,7 +239,7 @@ class _ResultPageState extends State<ResultPage> {
             children: [
               Text(unlocked.length == 1 ? first.title : '${first.title}\n\nE mais ${unlocked.length - 1} conquista(s).', textAlign: TextAlign.center),
               const SizedBox(height: 10),
-              const Text('Seu cartão de conquista tem um troféu e gráfico de evolução 📈.', textAlign: TextAlign.center),
+              const Text('O cartão de conquista segue o novo visual dourado do Super Anúncio.', textAlign: TextAlign.center),
             ],
           ),
           actions: [
