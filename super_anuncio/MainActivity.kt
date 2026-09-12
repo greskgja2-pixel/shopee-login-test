@@ -73,6 +73,29 @@ class MainActivity : FlutterActivity() {
                         }
                     }
                 }
+                "shareFile" -> {
+                    val args = call.arguments as? Map<*, *>
+                    val path = args?.get("path") as? String
+                    val mime = args?.get("mime") as? String ?: "application/octet-stream"
+                    val title = args?.get("title") as? String ?: "Compartilhar arquivo"
+                    if (path.isNullOrBlank()) {
+                        result.error("EMPTY_FILE", "Arquivo não encontrado", null)
+                    } else {
+                        try {
+                            val file = File(path)
+                            val uri: Uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = mime
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            startActivity(Intent.createChooser(sendIntent, title))
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("SHARE_FILE", e.message, null)
+                        }
+                    }
+                }
                 "scheduleReanalysis" -> {
                     val args = call.arguments as? Map<*, *>
                     val title = args?.get("title") as? String ?: "Seu anúncio"
