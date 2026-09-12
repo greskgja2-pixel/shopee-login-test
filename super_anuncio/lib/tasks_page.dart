@@ -25,7 +25,7 @@ class TasksPage extends StatelessWidget {
             const NoticeBox(icon: Icons.task_alt, text: 'Nenhuma reanálise pendente no momento.')
           else
             for (final task in pending) ...[
-              _PendingTaskCard(task: task, onGenerated: onGenerated, onFinalize: onFinalize),
+              _PendingTaskCard(task: task, state: state, onGenerated: onGenerated, onFinalize: onFinalize),
               const SizedBox(height: 10),
             ],
           const SizedBox(height: 24),
@@ -60,14 +60,16 @@ class _SectionTitle extends StatelessWidget {
 
 class _PendingTaskCard extends StatelessWidget {
   final ReanalysisTask task;
+  final PersistedAppState state;
   final AnalysisGeneratedCallback onGenerated;
   final Future<List<AchievementDef>> Function(AnalysisResult) onFinalize;
-  const _PendingTaskCard({required this.task, required this.onGenerated, required this.onFinalize});
+  const _PendingTaskCard({required this.task, required this.state, required this.onGenerated, required this.onFinalize});
 
   @override
   Widget build(BuildContext context) {
     final days = task.dueAt.difference(DateTime.now()).inDays;
     final label = days < 0 ? 'Atrasada' : days == 0 ? 'Hoje' : 'Em $days dia(s)';
+    final previous = findStoredAnalysis(state, task.sourceAnalysisId)?.result.input;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -79,6 +81,10 @@ class _PendingTaskCard extends StatelessWidget {
             const SizedBox(width: 6),
             Text('$label • ${formatDate(task.dueAt)}', style: const TextStyle(fontWeight: FontWeight.w700)),
           ]),
+          if (previous?.roasTarget != null) ...[
+            const SizedBox(height: 6),
+            Text('Meta de ROAS anterior: ${previous!.roasTarget!.toStringAsFixed(2)}', style: Theme.of(context).textTheme.bodySmall),
+          ],
           const SizedBox(height: 11),
           SizedBox(
             width: double.infinity,
@@ -89,6 +95,7 @@ class _PendingTaskCard extends StatelessWidget {
                   builder: (_) => PreparationWizard(
                     initialUrl: task.url,
                     previousAnalysisId: task.sourceAnalysisId,
+                    previousInput: previous,
                     onGenerated: onGenerated,
                     onFinalize: onFinalize,
                   ),
@@ -116,6 +123,7 @@ class _CompletedTaskCard extends StatelessWidget {
     final scoreDelta = before == null || after == null ? null : after.score - before.score;
     final soldDelta = _numDelta(before?.input.product?.sold?.toDouble(), after?.input.product?.sold?.toDouble());
     final roasDelta = _numDelta(before?.input.roas7d, after?.input.roas7d);
+    final roasTargetDelta = _numDelta(before?.input.roasTarget, after?.input.roasTarget);
 
     return Card(
       child: InkWell(
@@ -135,6 +143,7 @@ class _CompletedTaskCard extends StatelessWidget {
               if (scoreDelta != null) _DeltaChip(label: 'Nota', delta: scoreDelta.toDouble(), decimals: 0),
               if (soldDelta != null) _DeltaChip(label: 'Vendidos', delta: soldDelta, decimals: 0),
               if (roasDelta != null) _DeltaChip(label: 'ROAS', delta: roasDelta, decimals: 2),
+              if (roasTargetDelta != null) _DeltaChip(label: 'ROAS alvo', delta: roasTargetDelta, decimals: 2, neutralDirection: true),
             ]),
             if (task.completedAt != null) ...[
               const SizedBox(height: 7),
@@ -151,13 +160,14 @@ class _DeltaChip extends StatelessWidget {
   final String label;
   final double delta;
   final int decimals;
-  const _DeltaChip({required this.label, required this.delta, this.decimals = 1});
+  final bool neutralDirection;
+  const _DeltaChip({required this.label, required this.delta, this.decimals = 1, this.neutralDirection = false});
   @override
   Widget build(BuildContext context) {
     final positive = delta > 0;
     final negative = delta < 0;
     final icon = positive ? Icons.trending_up : negative ? Icons.trending_down : Icons.trending_flat;
-    final color = positive ? Colors.green : negative ? Colors.red : Colors.grey;
+    final color = neutralDirection ? Theme.of(context).colorScheme.primary : positive ? Colors.green : negative ? Colors.red : Colors.grey;
     final sign = delta > 0 ? '+' : '';
     return Chip(
       avatar: Icon(icon, size: 17, color: color),
@@ -194,7 +204,10 @@ class TaskComparisonPage extends StatelessWidget {
           _CompareMetric(title: 'Vendidos', before: '${before.input.product?.sold ?? '—'}', after: '${after.input.product?.sold ?? '—'}', delta: _numDelta(before.input.product?.sold?.toDouble(), after.input.product?.sold?.toDouble())),
           _CompareMetric(title: 'Avaliação', before: before.input.product?.rating?.toStringAsFixed(1) ?? '—', after: after.input.product?.rating?.toStringAsFixed(1) ?? '—', delta: _numDelta(before.input.product?.rating, after.input.product?.rating)),
           _CompareMetric(title: 'ROAS', before: before.input.roas7d?.toStringAsFixed(2) ?? '—', after: after.input.roas7d?.toStringAsFixed(2) ?? '—', delta: _numDelta(before.input.roas7d, after.input.roas7d)),
+          _CompareMetric(title: 'ROAS alvo', before: before.input.roasTarget?.toStringAsFixed(2) ?? '—', after: after.input.roasTarget?.toStringAsFixed(2) ?? '—', delta: _numDelta(before.input.roasTarget, after.input.roasTarget), neutralDirection: true),
           _CompareMetric(title: 'Gasto em Ads', before: before.input.adsSpend7d == null ? '—' : money(before.input.adsSpend7d!), after: after.input.adsSpend7d == null ? '—' : money(after.input.adsSpend7d!), delta: _numDelta(before.input.adsSpend7d, after.input.adsSpend7d), lowerIsBetter: true),
+          if (before.input.productCost != null || after.input.productCost != null)
+            _CompareMetric(title: 'Custo do produto', before: before.input.productCost == null ? '—' : money(before.input.productCost!), after: after.input.productCost == null ? '—' : money(after.input.productCost!), delta: _numDelta(before.input.productCost, after.input.productCost), lowerIsBetter: true),
           const SizedBox(height: 20),
           Text('Histórico deste produto', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 10),
@@ -227,14 +240,15 @@ class _CompareMetric extends StatelessWidget {
   final String after;
   final double? delta;
   final bool lowerIsBetter;
-  const _CompareMetric({required this.title, required this.before, required this.after, required this.delta, this.lowerIsBetter = false});
+  final bool neutralDirection;
+  const _CompareMetric({required this.title, required this.before, required this.after, required this.delta, this.lowerIsBetter = false, this.neutralDirection = false});
 
   @override
   Widget build(BuildContext context) {
     final d = delta;
-    final better = d == null || d == 0 ? null : lowerIsBetter ? d < 0 : d > 0;
-    final color = better == null ? Colors.grey : better ? Colors.green : Colors.red;
-    final icon = d == null || d == 0 ? Icons.trending_flat : d! > 0 ? Icons.trending_up : Icons.trending_down;
+    final better = neutralDirection || d == null || d == 0 ? null : lowerIsBetter ? d < 0 : d > 0;
+    final color = neutralDirection ? Theme.of(context).colorScheme.primary : better == null ? Colors.grey : better ? Colors.green : Colors.red;
+    final icon = d == null || d == 0 ? Icons.trending_flat : d > 0 ? Icons.trending_up : Icons.trending_down;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
