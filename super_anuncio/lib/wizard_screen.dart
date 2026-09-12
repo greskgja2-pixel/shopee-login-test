@@ -43,7 +43,7 @@ class _PreparationWizardState extends State<PreparationWizard> {
       autoError = null;
     });
     try {
-      final product = await ShopeeWebCollectorV2.collectProduct(context, widget.initialUrl);
+      final product = await ShopeeWebCollectorV3.collectProduct(context, widget.initialUrl);
       if (!mounted) return;
       if (product == null || product.title.trim().isEmpty) {
         setState(() {
@@ -77,7 +77,7 @@ class _PreparationWizardState extends State<PreparationWizard> {
       selectedIds.clear();
     });
     try {
-      final found = await ShopeeWebCollectorV2.searchCompetitors(context, title.text.trim(), ownItemId: autoProduct?.itemId);
+      final found = await ShopeeWebCollectorV3.searchCompetitors(context, title.text.trim(), ownItemId: autoProduct?.itemId);
       if (!mounted) return;
       setState(() {
         candidates = found.take(15).toList();
@@ -145,7 +145,13 @@ class _PreparationWizardState extends State<PreparationWizard> {
       context: context,
       barrierDismissible: false,
       builder: (_) => const AlertDialog(
-        content: Row(children: [CircularProgressIndicator(), SizedBox(width: 18), Expanded(child: Text('Gemini está comparando seu anúncio com os concorrentes e montando as soluções...'))]),
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 18),
+            Expanded(child: Text('Nossos sistemas estão analisando seu anúncio, comparando com os concorrentes e preparando as melhores soluções...')),
+          ],
+        ),
       ),
     );
 
@@ -242,7 +248,7 @@ class _PreparationWizardState extends State<PreparationWizard> {
       children: [
         Text('Contexto da análise', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
         const SizedBox(height: 8),
-        const Text('Essas perguntas ajudam a Gemini a separar problema de tráfego de problema de conversão.'),
+        const Text('Essas perguntas ajudam nossos sistemas a separar problema de tráfego de problema de conversão.'),
         const SizedBox(height: 18),
         DropdownButtonFormField<String>(initialValue: goal, decoration: inputDecoration('Principal objetivo', Icons.flag_outlined), items: ['Vender mais', 'Melhorar anúncio', 'Aumentar visitas'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (v) => setState(() => goal = v!)),
         const SizedBox(height: 12),
