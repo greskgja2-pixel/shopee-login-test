@@ -22,23 +22,39 @@ RoasStrategyAdvice buildRoasStrategy(AnalysisInput input) {
   final price = input.price;
   final cost = input.productCost;
 
+  // Premissa comercial adotada pelo Super Anúncio conforme configuração do projeto:
+  // 20% sobre o valor da venda + R$ 4,00 por item vendido.
+  // O custo informado pelo usuário deve representar o custo total próprio da venda
+  // (produto, embalagem e outros custos que ele queira considerar), sem somar novamente
+  // a comissão e a tarifa fixa abaixo.
+  const shopeeCommissionRate = 0.20;
+  const shopeeFixedFee = 4.00;
+
   double? margin;
   double? breakEven;
-  if (price != null && price > 0 && cost != null && cost >= 0 && cost < price) {
-    margin = (price - cost) / price;
+  if (price != null && price > 0 && cost != null && cost >= 0) {
+    final shopeeFees = (price * shopeeCommissionRate) + shopeeFixedFee;
+    final contributionBeforeAds = price - cost - shopeeFees;
+    margin = contributionBeforeAds / price;
     if (margin > 0) breakEven = 1 / margin;
   }
 
-  // O custo informado pelo usuário é apenas o custo do produto. Taxas da
-  // plataforma, impostos, embalagem, frete e outros custos variáveis podem
-  // elevar o ROAS real de equilíbrio. Por isso a recomendação nunca trata
-  // este número como margem de contribuição completa.
+  // Reserva de 15% acima do ROAS de equilíbrio estimado para evitar sugerir
+  // uma meta exatamente no limite calculado.
   final double? safeFloor = breakEven == null ? null : breakEven * 1.15;
+
+  if (margin != null && margin <= 0) {
+    return RoasStrategyAdvice(
+      title: 'A venda não deixa margem para Ads',
+      message: 'Com o preço e o custo informados, após considerar 20% da Shopee + R\$ 4 por venda, não sobra margem estimada para publicidade. Revise preço e custos antes de reduzir a Meta de ROAS ou buscar mais volume.',
+      grossMarginPct: margin * 100,
+    );
+  }
 
   if (breakEven != null && currentRoas != null && currentRoas < breakEven) {
     return RoasStrategyAdvice(
       title: 'Proteja a margem antes de buscar mais volume',
-      message: 'Com o custo informado, o ROAS atual está abaixo do ponto de equilíbrio preliminar. Não recomendamos reduzir a Meta de ROAS agora. Revise preço, custo, criativo e conversão antes de aumentar a agressividade dos anúncios. O cálculo ainda não inclui taxas, impostos, frete ou outros custos variáveis.',
+      message: 'Considerando o custo informado, 20% da Shopee e R\$ 4 por venda, o ROAS atual está abaixo do ponto de equilíbrio estimado. Não recomendamos reduzir a Meta de ROAS agora. Revise preço, custos, criativo e conversão antes de aumentar a agressividade dos anúncios.',
       grossMarginPct: margin! * 100,
       preliminaryBreakEvenRoas: breakEven,
     );
@@ -46,8 +62,8 @@ RoasStrategyAdvice buildRoasStrategy(AnalysisInput input) {
 
   if (breakEven != null && target != null && target < breakEven) {
     return RoasStrategyAdvice(
-      title: 'Meta de ROAS abaixo do limite preliminar',
-      message: 'A Meta de ROAS informada está abaixo do ponto de equilíbrio calculado apenas com preço e custo do produto. Subir a meta é mais prudente até você incluir os demais custos variáveis. Evite alterar a meta durante a fase de aprendizado da campanha.',
+      title: 'Meta de ROAS abaixo do limite estimado',
+      message: 'A Meta de ROAS informada está abaixo do ponto de equilíbrio estimado considerando custo, 20% da Shopee e R\$ 4 por venda. Subir a meta é mais prudente para proteger a margem. Evite alterações frequentes durante a fase de aprendizado da campanha.',
       grossMarginPct: margin! * 100,
       preliminaryBreakEvenRoas: breakEven,
       suggestedTarget: safeFloor,
@@ -82,8 +98,8 @@ RoasStrategyAdvice buildRoasStrategy(AnalysisInput input) {
       return RoasStrategyAdvice(
         title: canLower ? 'A meta pode estar restritiva' : 'Não reduza a meta sem revisar a margem',
         message: canLower
-            ? 'O ROAS real está bem abaixo da meta. Metas muito altas podem deixar a entrega mais seletiva e limitar tráfego e gasto. Se a campanha já saiu da fase de aprendizado e o objetivo for ganhar volume, teste uma redução pequena, monitore por vários dias e evite mudanças frequentes.'
-            : 'O ROAS real está abaixo da meta, mas sua margem estimada não deixa espaço seguro para reduzir muito a Meta de ROAS. Priorize melhorar conversão, preço e custos antes de buscar mais volume.',
+            ? 'O ROAS real está bem abaixo da meta. Metas muito altas podem limitar tráfego e gasto. Se a campanha já saiu da fase de aprendizado e o objetivo for ganhar volume, teste uma redução pequena, monitore por vários dias e evite mudanças frequentes.'
+            : 'O ROAS real está abaixo da meta, mas a margem estimada após custo + taxas da Shopee não deixa espaço seguro para reduzir muito a Meta de ROAS. Priorize melhorar conversão, preço e custos antes de buscar mais volume.',
         grossMarginPct: margin == null ? null : margin * 100,
         preliminaryBreakEvenRoas: breakEven,
         suggestedTarget: suggested,
@@ -101,7 +117,7 @@ RoasStrategyAdvice buildRoasStrategy(AnalysisInput input) {
   if (target != null) {
     return RoasStrategyAdvice(
       title: 'Meta registrada para comparação',
-      message: 'Quando você informar também o ROAS real dos últimos 7 dias, o Super Anúncio poderá comparar resultado versus meta e sugerir se vale manter, aumentar ou reduzir a Meta de ROAS. Evite mexer na meta durante a fase de aprendizado.',
+      message: 'Quando você informar também o ROAS real dos últimos 7 dias, o Super Anúncio poderá comparar resultado versus meta e sugerir se vale manter, aumentar ou reduzir a Meta de ROAS. O limite de rentabilidade considera o custo informado + 20% da Shopee + R\$ 4 por venda.',
       grossMarginPct: margin == null ? null : margin * 100,
       preliminaryBreakEvenRoas: breakEven,
     );
@@ -109,7 +125,7 @@ RoasStrategyAdvice buildRoasStrategy(AnalysisInput input) {
 
   return RoasStrategyAdvice(
     title: 'Use uma meta compatível com sua margem',
-    message: 'A Shopee recomenda usar o histórico do produto e as metas sugeridas pela plataforma como referência. Metas muito altas podem limitar a entrega; metas menores podem buscar mais volume. Informe a Meta de ROAS atual para o Super Anúncio acompanhar isso nas próximas reanálises.',
+    message: 'Informe a Meta de ROAS atual para acompanhar o desempenho nas próximas reanálises. Quando houver custo e preço disponíveis, o limite estimado de rentabilidade considera também 20% da Shopee + R\$ 4 por venda.',
     grossMarginPct: margin == null ? null : margin * 100,
     preliminaryBreakEvenRoas: breakEven,
   );
