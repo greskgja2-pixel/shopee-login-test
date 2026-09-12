@@ -23,17 +23,17 @@ class _ShopeeVerificationPageState extends State<_ShopeeVerificationPage> {
   bool loading = true;
   bool challenge = false;
   bool loginRequired = false;
+  bool challengeFocused = false;
   bool finished = false;
   int clearChecks = 0;
   int redirects = 0;
-  int focusTicks = 0;
-  late DateTime startedAt;
+  late DateTime pageStartedAt;
   String status = 'Verificando acesso à Shopee...';
 
   @override
   void initState() {
     super.initState();
-    startedAt = DateTime.now();
+    pageStartedAt = DateTime.now();
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFFFFFFFF))
@@ -41,18 +41,19 @@ class _ShopeeVerificationPageState extends State<_ShopeeVerificationPage> {
       ..setNavigationDelegate(NavigationDelegate(
         onNavigationRequest: _navigation,
         onPageStarted: (_) {
+          pageStartedAt = DateTime.now();
+          challengeFocused = false;
+          clearChecks = 0;
           if (!mounted) return;
           setState(() {
             loading = true;
-            clearChecks = 0;
-            focusTicks = 0;
             status = 'Carregando a Shopee...';
           });
         },
         onPageFinished: (_) {
           if (!mounted) return;
           setState(() => loading = false);
-          Future.delayed(const Duration(milliseconds: 250), _inspect);
+          Future.delayed(const Duration(milliseconds: 280), _inspect);
         },
         onWebResourceError: (error) {
           if (!mounted || error.isForMainFrame != true) return;
@@ -62,7 +63,7 @@ class _ShopeeVerificationPageState extends State<_ShopeeVerificationPage> {
       ))
       ..loadRequest(Uri.parse(widget.targetUrl));
 
-    poller = Timer.periodic(const Duration(milliseconds: 700), (_) => _inspect());
+    poller = Timer.periodic(const Duration(milliseconds: 650), (_) => _inspect());
   }
 
   @override
@@ -103,10 +104,7 @@ class _ShopeeVerificationPageState extends State<_ShopeeVerificationPage> {
         final decoded = _decode(fallback);
         if (decoded != null) return decoded;
       }
-      final candidate = raw
-          .replaceFirst(RegExp(r'^intent://', caseSensitive: false), 'https://')
-          .split('#Intent;')
-          .first;
+      final candidate = raw.replaceFirst(RegExp(r'^intent://', caseSensitive: false), 'https://').split('#Intent;').first;
       if (_isShopee(candidate)) return candidate;
     }
     return null;
@@ -143,16 +141,16 @@ class _ShopeeVerificationPageState extends State<_ShopeeVerificationPage> {
 
       if (type == 'captcha') {
         clearChecks = 0;
-        focusTicks++;
         if (!challenge || loginRequired) {
           setState(() {
             challenge = true;
             loginRequired = false;
-            status = 'A Shopee pediu uma verificação de segurança';
+            status = 'Resolva o CAPTCHA para continuar';
           });
         }
-        if (focusTicks == 1 || focusTicks % 4 == 0) {
-          await _focusChallenge();
+        if (!challengeFocused) {
+          challengeFocused = true;
+          await _focusChallengeOnce();
         }
         return;
       }
@@ -172,32 +170,28 @@ class _ShopeeVerificationPageState extends State<_ShopeeVerificationPage> {
 
       clearChecks += 1;
       if (challenge || loginRequired) {
-        if (clearChecks >= 3) {
+        if (clearChecks >= 2) {
           setState(() {
             challenge = false;
             loginRequired = false;
             status = 'Verificação concluída. Continuando...';
           });
           await _restorePage();
-          await Future.delayed(const Duration(milliseconds: 700));
+          await Future.delayed(const Duration(milliseconds: 420));
           _finish(true);
         }
         return;
       }
 
-      // Não libera cedo demais: alguns desafios da Shopee aparecem alguns
-      // segundos depois do primeiro carregamento.
-      final elapsed = DateTime.now().difference(startedAt);
-      if (elapsed < const Duration(seconds: 7)) {
-        if (mounted && status != 'Aguardando possíveis verificações da Shopee...') {
-          setState(() => status = 'Aguardando possíveis verificações da Shopee...');
+      final elapsed = DateTime.now().difference(pageStartedAt);
+      if (elapsed < const Duration(seconds: 4)) {
+        if (status != 'Verificando se a Shopee precisa de alguma confirmação...') {
+          setState(() => status = 'Verificando se a Shopee precisa de alguma confirmação...');
         }
         return;
       }
-      if (clearChecks >= 4) _finish(true);
-    } catch (_) {
-      // A página pode estar mudando de rota. A próxima checagem tenta de novo.
-    }
+      if (clearChecks >= 3) _finish(true);
+    } catch (_) {}
   }
 
   Map<String, dynamic> _decodeJsResult(Object raw) {
@@ -215,7 +209,7 @@ class _ShopeeVerificationPageState extends State<_ShopeeVerificationPage> {
     return const {'type': 'clear'};
   }
 
-  Future<void> _focusChallenge() async {
+  Future<void> _focusChallengeOnce() async {
     try {
       await controller.runJavaScript(_focusChallengeScript);
     } catch (_) {}
@@ -240,8 +234,7 @@ class _ShopeeVerificationPageState extends State<_ShopeeVerificationPage> {
         (()=>{
           if(document.body){document.body.style.zoom='';document.body.style.transformOrigin='';}
           document.documentElement.style.overflowX='';
-          const meta=document.querySelector('meta[name="viewport"]');
-          if(meta && meta.dataset.saOldViewport){meta.setAttribute('content',meta.dataset.saOldViewport);delete meta.dataset.saOldViewport;}
+          window.__SA_CAPTCHA_FOCUSED__=false;
           return true;
         })();
       ''');
@@ -259,45 +252,23 @@ class _ShopeeVerificationPageState extends State<_ShopeeVerificationPage> {
     (()=>{
       const url=location.href.toLowerCase();
       const body=(document.body?.innerText||'').toLowerCase();
+      const exact=/verifique\s+para\s+continuar|arraste\s+para\s+completar\s+o\s+quebra[- ]cabeça|arraste\s+para\s+completar\s+o\s+quebra[- ]cabeca/;
+      if(exact.test(body)) return JSON.stringify({type:'captcha',reason:'exact-text'});
+
       const visible=el=>{
         if(!el)return false;
         const s=getComputedStyle(el),r=el.getBoundingClientRect();
-        return s.display!=='none'&&s.visibility!=='hidden'&&Number(s.opacity||1)>0&&r.width>80&&r.height>45;
+        return s.display!=='none'&&s.visibility!=='hidden'&&Number(s.opacity||1)>0&&r.width>70&&r.height>40;
       };
-      const clue=/captcha|verifique|verificação|verificacao|segurança|seguranca|security|challenge|robô|robo|humano|arraste|deslize|tente novamente|prove que você|prove que voce/;
       const selectors=[
         'iframe[src*="captcha" i]','iframe[src*="verify" i]','iframe[src*="security" i]',
-        'iframe[src*="challenge" i]','iframe[src*="arkose" i]','iframe[src*="geetest" i]',
-        'iframe[src*="hcaptcha" i]','iframe[src*="recaptcha" i]',
+        'iframe[src*="challenge" i]','iframe[src*="geetest" i]','iframe[src*="hcaptcha" i]',
         '[class*="captcha" i]','[id*="captcha" i]','[class*="verify" i]','[id*="verify" i]',
-        '[class*="challenge" i]','[id*="challenge" i]','[class*="security" i]','[id*="security" i]',
-        '[data-testid*="captcha" i]','[data-testid*="verify" i]'
+        '[class*="challenge" i]','[id*="challenge" i]'
       ];
       for(const s of selectors){const el=document.querySelector(s);if(visible(el))return JSON.stringify({type:'captcha',reason:'selector'});}
-
-      const frames=[...document.querySelectorAll('iframe')].filter(visible);
-      for(const f of frames){
-        const r=f.getBoundingClientRect();
-        const meta=((f.src||'')+' '+(f.id||'')+' '+(f.className||'')+' '+(f.name||'')).toLowerCase();
-        const looksSecurity=clue.test(meta);
-        const bigPanel=r.width>=220&&r.height>=160;
-        const offToRight=r.left>innerWidth*.55||r.right>innerWidth*1.08;
-        if(looksSecurity||(bigPanel&&offToRight)) return JSON.stringify({type:'captcha',reason:'iframe'});
-      }
-
-      if(clue.test(body.slice(0,12000))) {
-        const strong=/verifique|verificação|verificacao|captcha|arraste|deslize|não sou um robô|nao sou um robo|security verification|tente novamente/.test(body.slice(0,12000));
-        if(strong) return JSON.stringify({type:'captcha',reason:'text'});
-      }
       if(/captcha|verify|verification|traffic|challenge/.test(url)) return JSON.stringify({type:'captcha',reason:'url'});
-
-      // Heurística para a tela branca de desafio que a Shopee posiciona fora da
-      // largura visível quando usamos identidade de navegador desktop.
-      const dw=Math.max(document.documentElement?.scrollWidth||0,document.body?.scrollWidth||0);
-      const mostlyWhite=body.length<3500;
-      if(dw>innerWidth*1.45&&frames.some(f=>{const r=f.getBoundingClientRect();return r.width>180&&r.height>130;})&&mostlyWhite){
-        return JSON.stringify({type:'captcha',reason:'overflow'});
-      }
+      if(/verificação de segurança|verificacao de seguranca|deslize para completar|tente novamente/.test(body.slice(0,12000))) return JSON.stringify({type:'captcha',reason:'text'});
 
       const password=document.querySelector('input[type="password"]');
       const loginUrl=/\/login|signin|account\/login/.test(url);
@@ -309,56 +280,59 @@ class _ShopeeVerificationPageState extends State<_ShopeeVerificationPage> {
 
   static const String _focusChallengeScript = r'''
     (()=>{
+      if(window.__SA_CAPTCHA_FOCUSED__) return true;
+      window.__SA_CAPTCHA_FOCUSED__=true;
       const visible=el=>{
         if(!el)return false;
         const s=getComputedStyle(el),r=el.getBoundingClientRect();
-        return s.display!=='none'&&s.visibility!=='hidden'&&Number(s.opacity||1)>0&&r.width>80&&r.height>45;
+        return s.display!=='none'&&s.visibility!=='hidden'&&Number(s.opacity||1)>0&&r.width>60&&r.height>35;
       };
-      const clue=/captcha|verify|verification|security|challenge|arkose|geetest|hcaptcha|recaptcha/;
+      const exact=/verifique\s+para\s+continuar|arraste\s+para\s+completar\s+o\s+quebra[- ]cabeça|arraste\s+para\s+completar\s+o\s+quebra[- ]cabeca/;
       let target=null;
-      const selectors=[
-        'iframe[src*="captcha" i]','iframe[src*="verify" i]','iframe[src*="security" i]',
-        'iframe[src*="challenge" i]','iframe[src*="arkose" i]','iframe[src*="geetest" i]',
-        '[class*="captcha" i]','[id*="captcha" i]','[class*="verify" i]','[id*="verify" i]',
-        '[class*="challenge" i]','[id*="challenge" i]','[class*="security" i]','[id*="security" i]'
-      ];
-      for(const s of selectors){const el=document.querySelector(s);if(visible(el)){target=el;break;}}
+      const candidates=[...document.querySelectorAll('main,section,article,div')].filter(visible);
+      const matches=candidates.filter(el=>{
+        const t=(el.innerText||'').toLowerCase().replace(/\s+/g,' ').trim();
+        return t.length>0&&t.length<1800&&exact.test(t);
+      });
+      if(matches.length){
+        matches.sort((a,b)=>{
+          const ar=a.getBoundingClientRect(),br=b.getBoundingClientRect();
+          return ar.width*ar.height-br.width*br.height;
+        });
+        target=matches[0];
+      }
+      if(!target){
+        const sels=['iframe[src*="captcha" i]','iframe[src*="verify" i]','iframe[src*="challenge" i]','[class*="captcha" i]','[id*="captcha" i]','[class*="verify" i]','[id*="verify" i]'];
+        for(const s of sels){const el=document.querySelector(s);if(visible(el)){target=el;break;}}
+      }
       if(!target){
         const frames=[...document.querySelectorAll('iframe')].filter(visible);
-        target=frames.find(f=>clue.test(((f.src||'')+' '+(f.id||'')+' '+(f.className||'')).toLowerCase()))||
-               frames.find(f=>{const r=f.getBoundingClientRect();return r.width>=220&&r.height>=160&&(r.left>innerWidth*.45||r.right>innerWidth);})||null;
-      }
-      if(!target){
-        const terms=/verifique|verificação|verificacao|captcha|arraste|deslize|security|tente novamente/;
-        for(const el of [...document.querySelectorAll('main,section,div')]){
-          if(!visible(el))continue;
-          const t=(el.innerText||'').toLowerCase().trim(),r=el.getBoundingClientRect();
-          if(t.length>0&&t.length<1600&&terms.test(t)&&r.width>160&&r.height>100){target=el;break;}
-        }
+        target=frames.find(f=>{const r=f.getBoundingClientRect();return r.width>180&&r.height>120;})||null;
       }
 
-      let meta=document.querySelector('meta[name="viewport"]');
-      if(!meta){meta=document.createElement('meta');meta.name='viewport';document.head?.appendChild(meta);}
-      if(!meta.dataset.saOldViewport)meta.dataset.saOldViewport=meta.getAttribute('content')||'';
-      meta.setAttribute('content','width=device-width, initial-scale=0.55, minimum-scale=0.35, maximum-scale=3.0, user-scalable=yes');
-      const pageWidth=Math.max(document.documentElement?.scrollWidth||980,980);
-      const scale=Math.max(.38,Math.min(.68,(innerWidth/pageWidth)*1.12));
-      if(document.body){document.body.style.zoom=String(scale);document.body.style.transformOrigin='top left';}
+      const viewportWidth=Math.max(320,window.innerWidth||360);
+      const pageWidth=Math.max(viewportWidth,document.documentElement?.scrollWidth||viewportWidth,document.body?.scrollWidth||viewportWidth);
+      const scale=Math.max(.42,Math.min(.82,(viewportWidth/pageWidth)*.96));
+      if(document.body){
+        document.body.style.zoom=String(scale);
+        document.body.style.transformOrigin='top left';
+      }
       document.documentElement.style.overflowX='auto';
 
-      if(target){
-        target.style.scrollMargin='110px';
-        target.scrollIntoView({behavior:'auto',block:'center',inline:'center'});
-        setTimeout(()=>{
-          const r=target.getBoundingClientRect();
-          const left=Math.max(0,window.scrollX+r.left-(innerWidth-r.width)/2);
-          const top=Math.max(0,window.scrollY+r.top-(innerHeight-r.height)/2);
-          window.scrollTo({left,top,behavior:'smooth'});
-        },180);
-      }else{
-        const left=Math.max(0,(document.documentElement.scrollWidth-innerWidth)/2);
-        window.scrollTo({left,top:Math.max(0,document.documentElement.scrollHeight*.18),behavior:'smooth'});
-      }
+      setTimeout(()=>{
+        if(target){
+          target.style.scrollMargin='90px';
+          target.scrollIntoView({behavior:'auto',block:'center',inline:'center'});
+          setTimeout(()=>{
+            const r=target.getBoundingClientRect();
+            const left=Math.max(0,window.scrollX+r.left-(window.innerWidth-r.width)/2);
+            const top=Math.max(0,window.scrollY+r.top-(window.innerHeight-r.height)/2);
+            window.scrollTo({left,top,behavior:'auto'});
+          },70);
+        }else{
+          window.scrollTo({left:Math.max(0,(document.documentElement.scrollWidth-window.innerWidth)/2),top:0,behavior:'auto'});
+        }
+      },90);
       return true;
     })();
   ''';
@@ -366,74 +340,63 @@ class _ShopeeVerificationPageState extends State<_ShopeeVerificationPage> {
   @override
   Widget build(BuildContext context) {
     final needsAction = challenge || loginRequired;
-    return PopScope(
-      canPop: true,
-      child: Scaffold(
-        appBar: AppBar(title: Text(needsAction ? 'Verificação da Shopee' : 'Preparando acesso à Shopee')),
-        body: Stack(
-          children: [
-            Positioned.fill(child: WebViewWidget(controller: controller)),
-            if (!needsAction)
-              Positioned.fill(
-                child: ColoredBox(
-                  color: Theme.of(context).scaffoldBackgroundColor,
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(28),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const CircularProgressIndicator(),
-                          const SizedBox(height: 18),
-                          Text(status, textAlign: TextAlign.center, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                          const SizedBox(height: 8),
-                          const Text('A Shopee às vezes pede uma verificação antes de liberar a leitura.', textAlign: TextAlign.center),
-                        ],
-                      ),
-                    ),
+    return Scaffold(
+      appBar: AppBar(title: Text(needsAction ? 'Verificação da Shopee' : 'Preparando acesso à Shopee')),
+      body: Stack(
+        children: [
+          Positioned.fill(child: WebViewWidget(controller: controller)),
+          if (!needsAction)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(28),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 18),
+                      Text(status, textAlign: TextAlign.center, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                    ]),
                   ),
                 ),
               ),
-            if (needsAction)
-              Positioned(
-                left: 10,
-                right: 10,
-                top: 8,
-                child: SafeArea(
-                  child: Card(
-                    elevation: 8,
-                    child: Padding(
-                      padding: const EdgeInsets.all(13),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(children: [
-                            Icon(challenge ? Icons.verified_user_outlined : Icons.login, color: kOrange),
-                            const SizedBox(width: 9),
-                            Expanded(child: Text(status, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16))),
-                          ]),
-                          const SizedBox(height: 6),
-                          Text(
-                            challenge
-                                ? 'Responda ao desafio da Shopee abaixo. O app reduziu a página e está tentando manter a verificação no centro da tela.'
-                                : 'Entre diretamente na Shopee nesta tela. O Super Anúncio não recebe sua senha.',
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                          const SizedBox(height: 9),
-                          Row(children: [
-                            if (challenge)
-                              Expanded(child: OutlinedButton.icon(onPressed: _focusChallenge, icon: const Icon(Icons.center_focus_strong), label: const Text('Centralizar'))),
-                            if (challenge) const SizedBox(width: 8),
-                            Expanded(child: FilledButton.icon(onPressed: _inspect, icon: const Icon(Icons.check_circle_outline), label: Text(challenge ? 'Já respondi' : 'Verificar login'))),
-                          ]),
-                        ],
+            ),
+          if (needsAction)
+            Positioned(
+              left: 10,
+              right: 10,
+              top: 8,
+              child: SafeArea(
+                child: Card(
+                  elevation: 8,
+                  child: Padding(
+                    padding: const EdgeInsets.all(13),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Row(children: [
+                        Icon(challenge ? Icons.verified_user_outlined : Icons.login, color: kOrange),
+                        const SizedBox(width: 9),
+                        Expanded(child: Text(status, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16))),
+                      ]),
+                      const SizedBox(height: 6),
+                      Text(
+                        challenge
+                            ? 'Resolva a verificação da Shopee abaixo. O app ajustou o enquadramento uma única vez e continuará automaticamente quando o CAPTCHA desaparecer.'
+                            : 'Entre diretamente na Shopee nesta tela. O Super Anúncio não recebe sua senha.',
+                        style: const TextStyle(fontSize: 13),
                       ),
-                    ),
+                      const SizedBox(height: 9),
+                      Row(children: [
+                        if (challenge)
+                          Expanded(child: OutlinedButton.icon(onPressed: _focusChallengeOnce, icon: const Icon(Icons.center_focus_strong), label: const Text('Centralizar'))),
+                        if (challenge) const SizedBox(width: 8),
+                        Expanded(child: FilledButton.icon(onPressed: _inspect, icon: const Icon(Icons.check_circle_outline), label: Text(challenge ? 'Já respondi' : 'Verificar login'))),
+                      ]),
+                    ]),
                   ),
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
