@@ -297,7 +297,7 @@ class _ArcadePainter extends CustomPainter {
       canvas.drawCircle(center, 19, Paint()..color = const Color(0xFF8E44AD));
       canvas.drawRect(Rect.fromCenter(center: center, width: 30, height: 10), Paint()..color = Colors.redAccent);
       final tp = TextPainter(
-        text: const TextSpan(text: 'R$', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)),
+        text: const TextSpan(text: r'R$', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)),
         textDirection: TextDirection.ltr,
       )..layout();
       tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
