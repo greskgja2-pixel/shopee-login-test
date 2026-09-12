@@ -18,4 +18,4 @@ dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/achievement_template.jpg
+    - assets/achievement_template.b64
