@@ -1,6 +1,12 @@
 name: Build Super Anuncio APK
 
 on:
+  push:
+    branches:
+      - super-anuncio-apk
+    paths:
+      - 'super_anuncio/**'
+      - '.github/workflows/build-super-anuncio.yml'
   workflow_dispatch:
 
 jobs:
@@ -33,6 +39,8 @@ jobs:
           rm -f build_super_anuncio/analysis_options.yaml
           cp -R super_anuncio/lib build_super_anuncio/lib
           cp super_anuncio/pubspec.yaml build_super_anuncio/pubspec.yaml
+          mkdir -p build_super_anuncio/assets
+          base64 -d super_anuncio/assets/achievement_template.b64 > build_super_anuncio/assets/achievement_template.jpg
           mkdir -p build_super_anuncio/android/app/src/main/kotlin/br/com/superanuncio/super_anuncio
           cp super_anuncio/*.kt build_super_anuncio/android/app/src/main/kotlin/br/com/superanuncio/super_anuncio/
           cp super_anuncio/android_manifest.xml build_super_anuncio/android/app/src/main/AndroidManifest.xml
@@ -40,6 +48,82 @@ jobs:
           cp super_anuncio/ic_launcher_sa.xml build_super_anuncio/android/app/src/main/res/drawable/ic_launcher_sa.xml
           mkdir -p build_super_anuncio/android/app/src/main/res/xml
           cp super_anuncio/file_paths.xml build_super_anuncio/android/app/src/main/res/xml/file_paths.xml
+
+      - name: Aplicar arte oficial das conquistas
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path('build_super_anuncio/lib/result_page.dart')
+          s = p.read_text()
+          new = r'''  Future<String?> _createShareImage({AchievementDef? achievement}) async {
+            try {
+              final cache = await kShareChannel.invokeMethod<String>('cacheDir');
+              if (cache == null || cache.isEmpty) return null;
+              const width = 1080.0;
+              const height = 1350.0;
+              final bytes = await rootBundle.load('assets/achievement_template.jpg');
+              final template = await ui.decodeImageFromList(bytes.buffer.asUint8List());
+              final recorder = ui.PictureRecorder();
+              final canvas = Canvas(recorder);
+              canvas.drawImageRect(
+                template,
+                Rect.fromLTWH(0, 0, template.width.toDouble(), template.height.toDouble()),
+                const Rect.fromLTWH(0, 0, width, height),
+                Paint()..filterQuality = FilterQuality.high,
+              );
+
+              void text(String value, double y, double size, FontWeight weight, Color color, {double maxWidth = 850, int maxLines = 3}) {
+                final tp = TextPainter(
+                  text: TextSpan(text: value, style: TextStyle(fontSize: size, fontWeight: weight, color: color, height: 1.08)),
+                  textDirection: TextDirection.ltr,
+                  textAlign: TextAlign.center,
+                  maxLines: maxLines,
+                  ellipsis: '…',
+                )..layout(maxWidth: maxWidth);
+                tp.paint(canvas, Offset((width - tp.width) / 2, y));
+              }
+
+              text('SUPER ANÚNCIO', 570, 56, FontWeight.w900, const Color(0xFFE94A0B), maxLines: 1);
+              text('CONQUISTA DESBLOQUEADA', 638, 29, FontWeight.w800, const Color(0xFF30343B), maxLines: 1);
+              text(achievement?.title ?? 'Anúncio em evolução', 715, 48, FontWeight.w900, const Color(0xFF171B22), maxWidth: 830, maxLines: 2);
+
+              canvas.drawRRect(
+                RRect.fromRectAndRadius(const Rect.fromLTWH(335, 835, 410, 76), const Radius.circular(38)),
+                Paint()..color = const Color(0xFFFFE8D7).withOpacity(.92),
+              );
+              text('Nota ${widget.result.score}/100', 848, 40, FontWeight.w900, const Color(0xFFE94A0B), maxLines: 1);
+              text(widget.result.input.title, 955, 29, FontWeight.w800, const Color(0xFF24272D), maxWidth: 820, maxLines: 3);
+              text('Analise. Otimize. Venda mais.', 1090, 28, FontWeight.w600, const Color(0xFF50545B), maxLines: 1);
+
+              canvas.drawRRect(
+                RRect.fromRectAndRadius(const Rect.fromLTWH(395, 1160, 290, 58), const Radius.circular(29)),
+                Paint()..color = const Color(0xFFFF5A1F),
+              );
+              text('By Gresk 2026', 1171, 28, FontWeight.w700, Colors.white, maxWidth: 280, maxLines: 1);
+              text('Que Deus e família seja sua prioridade. Gresk 2026', 1245, 19, FontWeight.w600, const Color(0xFF50545B), maxWidth: 850, maxLines: 1);
+
+              final picture = recorder.endRecording();
+              final image = await picture.toImage(width.toInt(), height.toInt());
+              final data = await image.toByteData(format: ui.ImageByteFormat.png);
+              template.dispose();
+              if (data == null) return null;
+              final file = File('$cache/super_anuncio_conquista_${DateTime.now().millisecondsSinceEpoch}.png');
+              await file.writeAsBytes(data.buffer.asUint8List(), flush: true);
+              return file.path;
+            } catch (e) {
+              debugPrint('Falha ao gerar arte da conquista: $e');
+              return null;
+            }
+          }
+
+'''
+          pattern = r"  Future<String\?> _createShareImage\(\{AchievementDef\? achievement\}\) async \{.*?\n  String _shareText\(\) \{"
+          out, n = re.subn(pattern, new + '  String _shareText() {', s, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit('Nao foi possivel localizar _createShareImage')
+          p.write_text(out)
+          PY
 
       - name: Dependencias
         working-directory: build_super_anuncio
@@ -56,13 +140,13 @@ jobs:
       - name: Preparar APK
         run: |
           mkdir -p dist
-          cp build_super_anuncio/build/app/outputs/flutter-apk/app-release.apk dist/Super-Anuncio-v1.5.2.apk
-          sha256sum dist/Super-Anuncio-v1.5.2.apk > dist/SHA256.txt
+          cp build_super_anuncio/build/app/outputs/flutter-apk/app-release.apk dist/Super-Anuncio-v1.5.3.apk
+          sha256sum dist/Super-Anuncio-v1.5.3.apk > dist/SHA256.txt
 
       - name: Publicar artefato
         uses: actions/upload-artifact@v4
         with:
-          name: Super-Anuncio-APK-v1.5.2
+          name: Super-Anuncio-APK-v1.5.3
           path: dist/*
           if-no-files-found: error
           retention-days: 30
