@@ -39,8 +39,6 @@ jobs:
           rm -f build_super_anuncio/analysis_options.yaml
           cp -R super_anuncio/lib build_super_anuncio/lib
           cp super_anuncio/pubspec.yaml build_super_anuncio/pubspec.yaml
-          mkdir -p build_super_anuncio/assets
-          cp super_anuncio/assets/achievement_template.b64 build_super_anuncio/assets/achievement_template.b64
           mkdir -p build_super_anuncio/android/app/src/main/kotlin/br/com/superanuncio/super_anuncio
           cp super_anuncio/*.kt build_super_anuncio/android/app/src/main/kotlin/br/com/superanuncio/super_anuncio/
           cp super_anuncio/android_manifest.xml build_super_anuncio/android/app/src/main/AndroidManifest.xml
@@ -48,9 +46,6 @@ jobs:
           cp super_anuncio/ic_launcher_sa.xml build_super_anuncio/android/app/src/main/res/drawable/ic_launcher_sa.xml
           mkdir -p build_super_anuncio/android/app/src/main/res/xml
           cp super_anuncio/file_paths.xml build_super_anuncio/android/app/src/main/res/xml/file_paths.xml
-
-      - name: Aplicar arte oficial das conquistas
-        run: python3 super_anuncio/tools/apply_achievement_template.py
 
       - name: Dependencias
         working-directory: build_super_anuncio
