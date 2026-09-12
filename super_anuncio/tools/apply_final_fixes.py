@@ -9,40 +9,8 @@ def replace(path, old, new):
         raise SystemExit(f'Padrao nao encontrado em {path}: {old[:80]!r}')
     p.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-# ROAS: regra operacional do app = custo informado + 20% do preco + R$ 4 por venda.
-replace('roas_strategy.dart',
-"""  double? margin;
-  double? breakEven;
-  if (price != null && price > 0 && cost != null && cost >= 0 && cost < price) {
-    margin = (price - cost) / price;
-    if (margin > 0) breakEven = 1 / margin;
-  }
-
-  // O custo informado pelo usuário é apenas o custo do produto. Taxas da
-  // plataforma, impostos, embalagem, frete e outros custos variáveis podem
-  // elevar o ROAS real de equilíbrio. Por isso a recomendação nunca trata
-  // este número como margem de contribuição completa.
-""",
-"""  double? margin;
-  double? breakEven;
-  if (price != null && price > 0 && cost != null && cost >= 0) {
-    const shopeePercentFee = 0.20;
-    const shopeeFixedFeePerSale = 4.0;
-    final contribution = price - cost - (price * shopeePercentFee) - shopeeFixedFeePerSale;
-    margin = contribution / price;
-    if (margin > 0) breakEven = 1 / margin;
-  }
-
-  // O ponto de equilibrio considera 20% sobre o preco + R$ 4 por venda,
-  // alem do custo total informado pelo usuario. Outros custos que nao estejam
-  // embutidos no campo de custo continuam fora da estimativa.
-""")
-replace('roas_strategy.dart',
-"O cálculo ainda não inclui taxas, impostos, frete ou outros custos variáveis.",
-"A estimativa já considera 20% da Shopee + R$ 4 por venda; outros custos não informados continuam fora da conta.")
-replace('roas_strategy.dart',
-"calculado apenas com preço e custo do produto. Subir a meta é mais prudente até você incluir os demais custos variáveis.",
-"calculado com preço, custo informado, 20% da Shopee e R$ 4 por venda. Subir a meta é mais prudente se a rentabilidade estiver apertada.")
+# A regra de ROAS (custo informado + 20% do preco + R$ 4 por venda)
+# ja esta gravada diretamente em roas_strategy.dart.
 
 # Campo de custo: mensagem curta para lembrar produto, embalagem e materiais.
 replace('wizard_screen.dart',
