@@ -267,7 +267,7 @@ class _ShopeeCollectorV2PageState extends State<_ShopeeCollectorV2Page> {
       final pct = m['percent'];
       if (pct is num) {
         setState(() {
-          progress = (pct.toDouble() / 100).clamp(0, 1);
+          progress = (pct.toDouble() / 100).clamp(0.0, 1.0).toDouble();
           status = '${m['message'] ?? 'Coletando informações do anúncio...'}';
         });
       } else {
@@ -582,7 +582,7 @@ const SA2={
                           Text(status, textAlign: TextAlign.center),
                           const SizedBox(height: 18),
                           if (widget.mode == _CollectorV2Mode.product) ...[
-                            LinearProgressIndicator(value: progress.clamp(0, 1), minHeight: 10, borderRadius: BorderRadius.circular(12)),
+                            LinearProgressIndicator(value: progress.clamp(0.0, 1.0).toDouble(), minHeight: 10, borderRadius: BorderRadius.circular(12)),
                             const SizedBox(height: 9),
                             Text('${(progress * 100).round()}%', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
                           ] else
