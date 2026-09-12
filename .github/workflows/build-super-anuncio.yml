@@ -40,7 +40,8 @@ jobs:
           cp -R super_anuncio/lib build_super_anuncio/lib
           cp super_anuncio/pubspec.yaml build_super_anuncio/pubspec.yaml
           mkdir -p build_super_anuncio/assets
-          base64 -d super_anuncio/assets/achievement_template.b64 > build_super_anuncio/assets/achievement_template.jpg
+          base64 -d -i super_anuncio/assets/achievement_template.b64 > build_super_anuncio/assets/achievement_template.jpg
+          test -s build_super_anuncio/assets/achievement_template.jpg
           mkdir -p build_super_anuncio/android/app/src/main/kotlin/br/com/superanuncio/super_anuncio
           cp super_anuncio/*.kt build_super_anuncio/android/app/src/main/kotlin/br/com/superanuncio/super_anuncio/
           cp super_anuncio/android_manifest.xml build_super_anuncio/android/app/src/main/AndroidManifest.xml
