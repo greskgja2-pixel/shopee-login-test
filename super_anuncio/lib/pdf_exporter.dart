@@ -91,6 +91,8 @@ class PdfExporter {
                 pw.SizedBox(height: 5),
                 pw.Text('Nota: ${result.score}/100'),
                 pw.Text('Gerado em: ${formatDate(DateTime.now())}'),
+                pw.SizedBox(height: 4),
+                pw.Text('By Gresk 2026', style: pw.TextStyle(fontSize: 9, color: PdfColors.deepOrange, fontWeight: pw.FontWeight.bold)),
               ]),
             ),
           ],
@@ -234,13 +236,36 @@ class PdfExporter {
         }
       }
 
+      widgets.add(pw.SizedBox(height: 22));
+      widgets.add(
+        pw.Container(
+          width: double.infinity,
+          padding: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: pw.BoxDecoration(
+            color: PdfColors.orange50,
+            border: pw.Border.all(color: PdfColors.deepOrange200),
+            borderRadius: pw.BorderRadius.circular(8),
+          ),
+          child: pw.Column(children: [
+            pw.Text('By Gresk 2026', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.deepOrange700, fontSize: 12)),
+            pw.SizedBox(height: 5),
+            pw.Text('Que Deus e família seja sua prioridade.', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 2),
+            pw.Text('Gresk 2026', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+          ]),
+        ),
+      );
+
       doc.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.all(34),
-          footer: (context) => pw.Align(
-            alignment: pw.Alignment.centerRight,
-            child: pw.Text('Super Anúncio - página ${context.pageNumber}/${context.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+          footer: (context) => pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text('By Gresk 2026', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+              pw.Text('Super Anúncio - página ${context.pageNumber}/${context.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+            ],
           ),
           build: (_) => widgets,
         ),
