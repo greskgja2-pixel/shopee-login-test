@@ -33,7 +33,7 @@ RoasStrategyAdvice buildRoasStrategy(AnalysisInput input) {
   // plataforma, impostos, embalagem, frete e outros custos variáveis podem
   // elevar o ROAS real de equilíbrio. Por isso a recomendação nunca trata
   // este número como margem de contribuição completa.
-  final safeFloor = breakEven == null ? null : breakEven * 1.15;
+  final double? safeFloor = breakEven == null ? null : breakEven * 1.15;
 
   if (breakEven != null && currentRoas != null && currentRoas < breakEven) {
     return RoasStrategyAdvice(
@@ -55,12 +55,12 @@ RoasStrategyAdvice buildRoasStrategy(AnalysisInput input) {
   }
 
   if (target != null && currentRoas != null) {
-    final fulfillment = target <= 0 ? 0 : currentRoas / target;
+    final double fulfillment = target <= 0 ? 0.0 : currentRoas / target;
 
     if (fulfillment >= 1.05) {
       double? suggested;
       if (safeFloor != null) {
-        suggested = math.max(safeFloor, target * .90);
+        suggested = math.max(safeFloor, target * .90).toDouble();
         if (suggested >= target * .98) suggested = null;
       } else {
         suggested = target * .90;
@@ -78,6 +78,7 @@ RoasStrategyAdvice buildRoasStrategy(AnalysisInput input) {
 
     if (fulfillment < .80) {
       final canLower = safeFloor == null || target * .90 > safeFloor;
+      final double? suggested = canLower ? math.max(safeFloor ?? 0.0, target * .90).toDouble() : null;
       return RoasStrategyAdvice(
         title: canLower ? 'A meta pode estar restritiva' : 'Não reduza a meta sem revisar a margem',
         message: canLower
@@ -85,7 +86,7 @@ RoasStrategyAdvice buildRoasStrategy(AnalysisInput input) {
             : 'O ROAS real está abaixo da meta, mas sua margem estimada não deixa espaço seguro para reduzir muito a Meta de ROAS. Priorize melhorar conversão, preço e custos antes de buscar mais volume.',
         grossMarginPct: margin == null ? null : margin * 100,
         preliminaryBreakEvenRoas: breakEven,
-        suggestedTarget: canLower ? math.max(safeFloor ?? 0, target * .90) : null,
+        suggestedTarget: suggested,
       );
     }
 
