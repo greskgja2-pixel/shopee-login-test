@@ -11,10 +11,28 @@ class AnalysisInput {
   final String issue;
   final bool adsActive;
   final double? roas7d;
+  final double? roasTarget;
   final double? adsSpend7d;
+  final double? productCost;
   final ShopeeProductData? product;
   final List<CompetitorCandidate> competitors;
-  const AnalysisInput({required this.url, required this.title, required this.description, required this.category, required this.price, required this.goal, required this.stage, required this.issue, required this.adsActive, required this.roas7d, required this.adsSpend7d, required this.product, required this.competitors});
+  const AnalysisInput({
+    required this.url,
+    required this.title,
+    required this.description,
+    required this.category,
+    required this.price,
+    required this.goal,
+    required this.stage,
+    required this.issue,
+    required this.adsActive,
+    required this.roas7d,
+    this.roasTarget,
+    required this.adsSpend7d,
+    this.productCost,
+    required this.product,
+    required this.competitors,
+  });
 }
 
 class ShopeeProductData {
@@ -27,6 +45,12 @@ class ShopeeProductData {
   final String? imageUrl;
   final double? price;
   final double? priceBeforeDiscount;
+  final double? priceMin;
+  final double? priceMax;
+  final String? bestSellingVariationName;
+  final double? bestSellingVariationPrice;
+  final int? bestSellingVariationSold;
+  final String? priceBasis;
   final double? rating;
   final int? reviewCount;
   final int? sold;
@@ -35,12 +59,42 @@ class ShopeeProductData {
   final bool hasVideo;
   final int attributesCount;
   final int variationCount;
-  const ShopeeProductData({required this.url, required this.shopId, required this.itemId, required this.title, required this.description, required this.category, required this.imageUrl, required this.price, required this.priceBeforeDiscount, required this.rating, required this.reviewCount, required this.sold, required this.stock, required this.imageCount, required this.hasVideo, required this.attributesCount, required this.variationCount});
+  const ShopeeProductData({
+    required this.url,
+    required this.shopId,
+    required this.itemId,
+    required this.title,
+    required this.description,
+    required this.category,
+    required this.imageUrl,
+    required this.price,
+    required this.priceBeforeDiscount,
+    this.priceMin,
+    this.priceMax,
+    this.bestSellingVariationName,
+    this.bestSellingVariationPrice,
+    this.bestSellingVariationSold,
+    this.priceBasis,
+    required this.rating,
+    required this.reviewCount,
+    required this.sold,
+    required this.stock,
+    required this.imageCount,
+    required this.hasVideo,
+    required this.attributesCount,
+    required this.variationCount,
+  });
 }
 
 class CompetitorCandidate {
   final String title;
   final double? price;
+  final double? priceMin;
+  final double? priceMax;
+  final String? bestSellingVariationName;
+  final double? bestSellingVariationPrice;
+  final double? bestSellingVariationSold;
+  final String? priceBasis;
   final String link;
   final String? imageUrl;
   final double? rating;
@@ -49,7 +103,24 @@ class CompetitorCandidate {
   final String itemId;
   final String description;
   final String category;
-  const CompetitorCandidate({required this.title, required this.price, required this.link, required this.imageUrl, required this.rating, required this.sold, required this.shopId, required this.itemId, required this.description, required this.category});
+  const CompetitorCandidate({
+    required this.title,
+    required this.price,
+    this.priceMin,
+    this.priceMax,
+    this.bestSellingVariationName,
+    this.bestSellingVariationPrice,
+    this.bestSellingVariationSold,
+    this.priceBasis,
+    required this.link,
+    required this.imageUrl,
+    required this.rating,
+    required this.sold,
+    required this.shopId,
+    required this.itemId,
+    required this.description,
+    required this.category,
+  });
   String get key => '${shopId ?? 'manual'}:$itemId';
 }
 
@@ -155,7 +226,8 @@ class AnalysisResult {
         adsAction = 'Informe ROAS e gasto para separar problema de tráfego de problema de conversão.';
       } else {
         adsScore = roas >= 5 ? 12 : roas >= 3 ? 10 : roas >= 2 ? 7 : 4;
-        adsReason = 'ROAS informado: ${roas.toStringAsFixed(2)}${input.adsSpend7d == null ? '' : ' • gasto ${money(input.adsSpend7d!)} em 7 dias'}.';
+        final targetPart = input.roasTarget == null ? '' : ' • Meta de ROAS ${input.roasTarget!.toStringAsFixed(2)}';
+        adsReason = 'ROAS informado: ${roas.toStringAsFixed(2)}$targetPart${input.adsSpend7d == null ? '' : ' • gasto ${money(input.adsSpend7d!)} em 7 dias'}.';
         adsAction = roas < 2 ? 'Antes de aumentar orçamento, revise oferta, preço, criativo e conversão do anúncio.' : 'O Ads está gerando retorno; preserve o que funciona e teste melhorias sem mudanças bruscas.';
       }
     }
