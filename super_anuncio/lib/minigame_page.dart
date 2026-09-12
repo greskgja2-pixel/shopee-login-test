@@ -108,7 +108,7 @@ class _SaArcadePageState extends State<SaArcadePage> {
 
   void _move(double dx, double width) {
     if (gameOver || width <= 0) return;
-    setState(() => shipX = (shipX + dx / width).clamp(.05, .95));
+    setState(() => shipX = (shipX + dx / width).clamp(.05, .95).toDouble());
   }
 
   void _finishGame() {
@@ -150,6 +150,7 @@ class _SaArcadePageState extends State<SaArcadePage> {
 
   @override
   Widget build(BuildContext context) {
+    final hearts = List.filled(math.max(0, lives), '♥').join();
     return Scaffold(
       backgroundColor: const Color(0xFF070A18),
       appBar: AppBar(
@@ -182,7 +183,7 @@ class _SaArcadePageState extends State<SaArcadePage> {
                   const Spacer(),
                   _ArcadeHud(label: 'RECORDE', value: '$highScore'),
                   const SizedBox(width: 14),
-                  _ArcadeHud(label: 'VIDAS', value: '♥' * math.max(0, lives)),
+                  _ArcadeHud(label: 'VIDAS', value: hearts),
                 ]),
               ),
               Positioned(
