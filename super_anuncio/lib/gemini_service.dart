@@ -23,6 +23,12 @@ class GeminiService {
           'imageUrl': p?.imageUrl,
           'imageUrls': gallery,
           'priceBeforeDiscount': p?.priceBeforeDiscount,
+          'priceMin': p?.priceMin,
+          'priceMax': p?.priceMax,
+          'bestSellingVariationName': p?.bestSellingVariationName,
+          'bestSellingVariationPrice': p?.bestSellingVariationPrice,
+          'bestSellingVariationSold': p?.bestSellingVariationSold,
+          'priceBasis': p?.priceBasis,
           'rating': p?.rating,
           'reviewCount': p?.reviewCount,
           'sold': p?.sold,
@@ -37,6 +43,12 @@ class GeminiService {
           'description': c.description,
           'category': c.category,
           'price': c.price,
+          'priceMin': c.priceMin,
+          'priceMax': c.priceMax,
+          'bestSellingVariationName': c.bestSellingVariationName,
+          'bestSellingVariationPrice': c.bestSellingVariationPrice,
+          'bestSellingVariationSold': c.bestSellingVariationSold,
+          'priceBasis': c.priceBasis,
           'rating': c.rating,
           'sold': c.sold,
           'imageUrl': c.imageUrl,
@@ -48,7 +60,12 @@ class GeminiService {
           'issue': input.issue,
           'adsActive': input.adsActive,
           'roas7d': input.roas7d,
+          'roasTarget': input.roasTarget,
           'adsSpend7d': input.adsSpend7d,
+          'productCost': input.productCost,
+          'costWarning': input.productCost == null
+              ? null
+              : 'O custo informado é somente do produto e não inclui automaticamente taxas, impostos, frete, embalagem ou outros custos variáveis.',
         },
       };
       req.write(jsonEncode(payload));
