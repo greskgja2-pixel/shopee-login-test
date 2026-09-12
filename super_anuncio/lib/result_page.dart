@@ -3,7 +3,19 @@ part of 'main.dart';
 class ResultPage extends StatefulWidget {
   final AnalysisResult result;
   final Future<List<AchievementDef>> Function(AnalysisResult) onFinalize;
-  const ResultPage({super.key, required this.result, required this.onFinalize});
+  final AnalysisGeneratedCallback onGenerated;
+  final bool fromHistory;
+  final String? storedAnalysisId;
+  final Future<void> Function(AnalysisResult)? onDelete;
+  const ResultPage({
+    super.key,
+    required this.result,
+    required this.onFinalize,
+    required this.onGenerated,
+    this.fromHistory = false,
+    this.storedAnalysisId,
+    this.onDelete,
+  });
 
   @override
   State<ResultPage> createState() => _ResultPageState();
@@ -11,6 +23,7 @@ class ResultPage extends StatefulWidget {
 
 class _ResultPageState extends State<ResultPage> {
   bool finalizing = false;
+  bool exporting = false;
   AchievementDef? lastAchievement;
 
   Future<String?> _createShareImage({AchievementDef? achievement}) async {
@@ -29,7 +42,6 @@ class _ResultPageState extends State<ResultPage> {
       final inner = Paint()..color = Colors.white;
       canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(80, 80, 920, 1190), const Radius.circular(38)), inner);
 
-      // Troféu estilizado + gráfico subindo.
       final gold = Paint()..color = const Color(0xFFFFC72C);
       final darkGold = Paint()..color = const Color(0xFFC88700);
       canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(390, 190, 300, 260), const Radius.circular(48)), gold);
@@ -93,6 +105,27 @@ class _ResultPageState extends State<ResultPage> {
     }
   }
 
+  Future<void> _exportPdf() async {
+    if (exporting) return;
+    setState(() => exporting = true);
+    final path = await PdfExporter.create(widget.result);
+    if (!mounted) return;
+    setState(() => exporting = false);
+    if (path == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Não consegui gerar o PDF agora.')));
+      return;
+    }
+    try {
+      await kShareChannel.invokeMethod('shareFile', {
+        'path': path,
+        'mime': 'application/pdf',
+        'title': 'Exportar relatório do Super Anúncio',
+      });
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PDF criado, mas não consegui abrir o compartilhamento.')));
+    }
+  }
+
   Future<void> _scheduleReminder() async {
     final due = widget.result.reanalyzeAt;
     if (due == null) return;
@@ -150,7 +183,7 @@ class _ResultPageState extends State<ResultPage> {
         builder: (_) => AlertDialog(
           icon: const Icon(Icons.notifications_active_outlined, size: 44),
           title: const Text('Tarefa criada para daqui a 7 dias'),
-          content: Text('O Super Anúncio agendou uma notificação para ${formatDate(due)}. Ao tocar nela, o app abre com este anúncio pronto para reanálise.'),
+          content: Text('O Super Anúncio agendou uma notificação para ${formatDate(due)}. A tarefa também ficou salva na nova aba Tarefas.'),
           actions: [FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Entendi'))],
         ),
       );
@@ -162,6 +195,35 @@ class _ResultPageState extends State<ResultPage> {
     Navigator.popUntil(context, (route) => route.isFirst);
   }
 
+  void _reanalyze() {
+    Navigator.of(context).pushReplacement(MaterialPageRoute(
+      builder: (_) => PreparationWizard(
+        initialUrl: widget.result.input.url,
+        previousAnalysisId: widget.storedAnalysisId,
+        onGenerated: widget.onGenerated,
+        onFinalize: widget.onFinalize,
+      ),
+    ));
+  }
+
+  Future<void> _delete() async {
+    if (widget.onDelete == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Apagar análise?'),
+        content: const Text('Isso apaga o histórico deste produto e as tarefas de reanálise ligadas a ele neste aparelho.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Apagar')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await widget.onDelete!(widget.result);
+    if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
+  }
+
   @override
   Widget build(BuildContext context) {
     final r = widget.result;
@@ -169,7 +231,7 @@ class _ResultPageState extends State<ResultPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Resultado da análise')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 170),
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 220),
         children: [
           Card(
             color: Theme.of(context).colorScheme.primaryContainer.withOpacity(.25),
@@ -191,6 +253,8 @@ class _ResultPageState extends State<ResultPage> {
           FilledButton.tonalIcon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CoachPage(result: r))), icon: const Icon(Icons.school_outlined), label: const Text('Rever tutorial passo a passo')),
           const SizedBox(height: 20),
           Text('Raio-X completo', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 5),
+          Text('Toque em uma categoria para ver por que recebeu a nota, como melhorar e dicas práticas.', style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 10),
           for (final d in r.dimensions) DimensionCard(dimension: d),
           const SizedBox(height: 20),
@@ -221,18 +285,30 @@ class _ResultPageState extends State<ResultPage> {
             Row(children: [
               Expanded(child: OutlinedButton.icon(onPressed: _share, icon: const Icon(Icons.share_outlined), label: const Text('Compartilhar'))),
               const SizedBox(width: 10),
-              Expanded(child: OutlinedButton.icon(onPressed: _newAnalysis, icon: const Icon(Icons.add_circle_outline), label: const Text('Nova análise'))),
+              Expanded(child: OutlinedButton.icon(onPressed: exporting ? null : _exportPdf, icon: const Icon(Icons.picture_as_pdf_outlined), label: Text(exporting ? 'Gerando...' : 'Exportar'))),
             ]),
             const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: finalizing ? null : _finalize,
-                icon: const Icon(Icons.check_circle_outline),
-                label: Text(finalizing ? 'Finalizando...' : 'FINALIZAR ANÁLISE'),
-                style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 15), textStyle: const TextStyle(fontWeight: FontWeight.w900)),
+            if (widget.fromHistory) ...[
+              Row(children: [
+                Expanded(child: OutlinedButton.icon(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close), label: const Text('Fechar'))),
+                const SizedBox(width: 8),
+                Expanded(child: FilledButton.tonalIcon(onPressed: _reanalyze, icon: const Icon(Icons.refresh), label: const Text('Reanalisar'))),
+              ]),
+              const SizedBox(height: 8),
+              SizedBox(width: double.infinity, child: TextButton.icon(onPressed: _delete, icon: const Icon(Icons.delete_outline), label: const Text('Apagar'))),
+            ] else ...[
+              SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: _newAnalysis, icon: const Icon(Icons.add_circle_outline), label: const Text('Nova análise'))),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: finalizing ? null : _finalize,
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: Text(finalizing ? 'Finalizando...' : 'FINALIZAR ANÁLISE'),
+                  style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 15), textStyle: const TextStyle(fontWeight: FontWeight.w900)),
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
