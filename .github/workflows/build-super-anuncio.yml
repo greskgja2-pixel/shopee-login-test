@@ -1,12 +1,6 @@
 name: Build Super Anuncio APK
 
 on:
-  push:
-    branches:
-      - super-anuncio-apk
-    paths:
-      - 'super_anuncio/**'
-      - '.github/workflows/build-super-anuncio.yml'
   workflow_dispatch:
 
 jobs:
