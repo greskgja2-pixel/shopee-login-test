@@ -74,4 +74,74 @@ new_gate = """const r=target.getBoundingClientRect();
             window.scrollBy({left:dx,top:dy,behavior:'auto'});"""
 replace('shopee_verification_gate.dart', old_gate, new_gate)
 
-print('Correcoes finais v1.5.5 aplicadas ao build.')
+# Fluxo de concorrentes: a Shopee abre com o título do anúncio e o usuário escolhe
+# exatamente 3 produtos. Só esses três retornam para a análise.
+replace('main.dart',
+"part 'shopee_web_collector_v2.dart';\n",
+"part 'shopee_web_collector_v2.dart';\npart 'shopee_competitor_picker.dart';\n")
+
+replace('wizard_screen.dart',
+"""  Future<void> _searchCompetitors() async {
+    if (title.text.trim().isEmpty || !mounted) return;
+    setState(() {
+      loadingCompetitors = true;
+      candidates = [];
+      selectedIds.clear();
+    });
+    try {
+      final found = await ShopeeWebCollectorV3.searchCompetitors(context, title.text.trim(), ownItemId: autoProduct?.itemId);
+      if (!mounted) return;
+      setState(() {
+        candidates = found.take(15).toList();
+        loadingCompetitors = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => loadingCompetitors = false);
+    }
+  }
+""",
+"""  Future<void> _searchCompetitors() async {
+    if (title.text.trim().isEmpty || !mounted) return;
+    setState(() => loadingCompetitors = true);
+    try {
+      final found = await ShopeeCompetitorPicker.pick(
+        context,
+        title.text.trim(),
+        ownItemId: autoProduct?.itemId,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (found.isNotEmpty) {
+          candidates = found.take(3).toList();
+          manualCompetitors.clear();
+          selectedIds
+            ..clear()
+            ..addAll(candidates.map((c) => c.key));
+        }
+        loadingCompetitors = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => loadingCompetitors = false);
+    }
+  }
+""")
+
+replace('wizard_screen.dart',
+"Expanded(child: Text('Escolha até 3 concorrentes', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900))),",
+"Expanded(child: Text('Concorrentes selecionados', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900))),")
+
+replace('wizard_screen.dart',
+"const Text('A busca usa o título real do seu anúncio. Quando a Shopee disponibiliza vendas por variação, o app usa a variação líder também nos concorrentes para deixar a comparação de preço mais justa.'),",
+"const Text('A pesquisa abre com o título do seu anúncio. Escolha 3 produtos diretamente na Shopee e toque em Voltar para Análise. Apenas os anúncios escolhidos por você serão importados.'),")
+
+replace('wizard_screen.dart',
+"const NoticeBox(icon: Icons.search_off, text: 'Nenhum produto confirmado foi coletado. Tente novamente ou adicione um concorrente manualmente.'),",
+"const NoticeBox(icon: Icons.search_off, text: 'Nenhum concorrente foi selecionado. Toque em Selecionar concorrentes para abrir a pesquisa da Shopee.'),")
+
+replace('wizard_screen.dart',
+"Expanded(child: OutlinedButton.icon(onPressed: loadingCompetitors ? null : _searchCompetitors, icon: const Icon(Icons.refresh), label: const Text('Buscar novamente'))),",
+"Expanded(child: OutlinedButton.icon(onPressed: loadingCompetitors ? null : _searchCompetitors, icon: const Icon(Icons.travel_explore), label: const Text('Selecionar concorrentes'))),")
+
+print('Correcoes finais v1.5.6 aplicadas ao build.')
