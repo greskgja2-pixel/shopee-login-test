@@ -128,12 +128,14 @@ class _HomePageState extends State<HomePage> {
     if (result.finalized) return const [];
     final before = Set<int>.from(appState.unlockedAchievements);
     final now = DateTime.now();
+    final targetDay = now.add(const Duration(days: 7));
+    final reanalysisDue = DateTime(targetDay.year, targetDay.month, targetDay.day, 8);
     final stored = findStoredForResult(appState, result);
     final product = findProductForAnalysis(appState, result);
 
     setState(() {
       result.finalized = true;
-      result.reanalyzeAt = now.add(const Duration(days: 7));
+      result.reanalyzeAt = reanalysisDue;
       appState.finalizedAnalyses += 1;
       appState.competitorSelections += result.competitors.length;
       if (result.input.adsActive) appState.adsAnalyses += 1;
