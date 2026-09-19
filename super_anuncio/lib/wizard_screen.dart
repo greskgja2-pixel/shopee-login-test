@@ -407,6 +407,23 @@ class _PreparationWizardState extends State<PreparationWizard> {
           ],
         ),
         const SizedBox(height: 14),
+        if (!loadingCompetitors && selectedIds.isEmpty) ...[
+          SizedBox(
+            width: double.infinity,
+            child: TextButton.icon(
+              onPressed: _generate,
+              icon: const Icon(Icons.skip_next),
+              label: const Text('Pular concorrentes e continuar'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Use esta opção quando nenhum resultado for realmente comparável ao seu produto. A análise continuará sem inventar concorrentes inadequados.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12),
+          ),
+          const SizedBox(height: 14),
+        ],
         for (final c in all)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
