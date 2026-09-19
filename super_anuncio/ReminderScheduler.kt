@@ -18,17 +18,28 @@ object ReminderScheduler {
             putExtra("title", title)
             putExtra("url", url)
         }
+
+        if (at <= System.currentTimeMillis()) {
+            if (persist) remove(context, id)
+            context.sendBroadcast(intent)
+            return
+        }
+
         val pending = PendingIntent.getBroadcast(
             context,
             id,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && alarm.canScheduleExactAlarms()) {
+            alarm.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending)
         } else {
             alarm.set(AlarmManager.RTC_WAKEUP, at, pending)
         }
+
         if (persist) save(context, id, title, url, at)
     }
 
@@ -51,13 +62,20 @@ object ReminderScheduler {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val items = prefs.getStringSet(KEY, emptySet()) ?: emptySet()
         val now = System.currentTimeMillis()
+
         for (entry in items.toList()) {
             val p = entry.split("|", limit = 4)
             if (p.size != 4) continue
             val id = p[0].toIntOrNull() ?: continue
             val at = p[1].toLongOrNull() ?: continue
-            if (at <= now) continue
-            schedule(context, id, Uri.decode(p[2]), Uri.decode(p[3]), at, persist = false)
+            val title = Uri.decode(p[2])
+            val url = Uri.decode(p[3])
+
+            if (at <= now) {
+                schedule(context, id, title, url, now + 1500L, persist = false)
+            } else {
+                schedule(context, id, title, url, at, persist = false)
+            }
         }
     }
 }
