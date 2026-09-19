@@ -28,6 +28,7 @@ part 'shopee_service.dart';
 part 'shopee_connection.dart';
 part 'shopee_web_collector.dart';
 part 'shopee_web_collector_v2.dart';
+part 'shopee_competitor_picker.dart';
 part 'shopee_verification_gate.dart';
 part 'gemini_service.dart';
 part 'engine.dart';
