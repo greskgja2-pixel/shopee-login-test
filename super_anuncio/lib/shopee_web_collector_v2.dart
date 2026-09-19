@@ -90,6 +90,46 @@ class ShopeeWebCollectorV2 {
       ));
       if (out.length >= 20) break;
     }
+    final ignored = <String>{
+      'para', 'com', 'sem', 'por', 'uma', 'um', 'uns', 'umas',
+      'de', 'da', 'do', 'das', 'dos', 'e', 'o', 'a', 'os', 'as',
+      'kit', 'produto', 'novo', 'nova',
+    };
+
+    Set<String> terms(String text) {
+      return text
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^a-z0-9à-öø-ÿ ]'), ' ')
+          .split(RegExp(r'\s+'))
+          .where((w) => w.length >= 3 && !ignored.contains(w))
+          .toSet();
+    }
+
+    final sourceTerms = terms(title);
+    int relevance(CompetitorCandidate item) {
+      final itemTerms = terms(item.title);
+      if (sourceTerms.isEmpty || itemTerms.isEmpty) return 0;
+      var matches = 0;
+      for (final word in sourceTerms) {
+        if (itemTerms.contains(word)) matches++;
+      }
+      return matches;
+    }
+
+    out.sort((a, b) {
+      final relevanceCompare = relevance(b).compareTo(relevance(a));
+      if (relevanceCompare != 0) return relevanceCompare;
+
+      final soldA = a.sold ?? -1;
+      final soldB = b.sold ?? -1;
+      final soldCompare = soldB.compareTo(soldA);
+      if (soldCompare != 0) return soldCompare;
+
+      final ratingA = a.rating ?? -1;
+      final ratingB = b.rating ?? -1;
+      return ratingB.compareTo(ratingA);
+    });
+
     return out;
   }
 
