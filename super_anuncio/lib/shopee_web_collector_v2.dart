@@ -513,9 +513,9 @@ const SA2={
  },
  modelPrice:m=>SA2.price(m?.price??m?.current_price??m?.promotion_price??m?.price_stocks?.[0]?.current_price??m?.price_stocks?.[0]?.promotion_price),
  modelSold:m=>{
-   const values=[m?.sold,m?.historical_sold,m?.global_sold_count,m?.sold_count,m?.model_sold,m?.sales,m?.order_count,m?.orders];
-   for(const v of values){const n=Number(v);if(Number.isFinite(n)&&n>=0)return n;}
-   return null;
+   const values=[m?.historical_sold,m?.global_sold_count,m?.sold,m?.sold_count,m?.model_sold,m?.sales,m?.order_count,m?.orders];
+   const nums=values.map(Number).filter(v=>Number.isFinite(v)&&v>=0);
+   return nums.length?Math.max(...nums):null;
  },
  modelName:(m,item,index)=>{
    const direct=SA2.clean(m?.name||m?.model_name||m?.variation_name||m?.display_name||'');
