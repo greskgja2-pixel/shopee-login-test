@@ -20,7 +20,7 @@ RoasStrategyAdvice buildRoasStrategy(AnalysisInput input) {
   final currentRoas = input.roas7d;
   final target = input.roasTarget;
   final price = input.price;
-  final cost = input.productCost;
+  final cost = input.effectiveProductCost;
 
   // Premissa comercial adotada pelo Super Anúncio conforme configuração do projeto:
   // 20% sobre o valor da venda + R$ 4,00 por item vendido.
