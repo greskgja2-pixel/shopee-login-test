@@ -9,14 +9,6 @@ def replace(path, old, new):
         raise SystemExit(f'Padrao nao encontrado em {path}: {old[:100]!r}')
     p.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-# Campo de custo: mensagem curta para lembrar produto, embalagem e materiais.
-replace('wizard_screen.dart',
-"subtitle: const Text('Preencha só se você souber o custo do produto.'),",
-"subtitle: const Text('Informe, se possível, o custo total que você tem para preparar uma venda.'),")
-replace('wizard_screen.dart',
-"InputBox(controller: productCost, label: 'Custo do produto', icon: Icons.inventory_2_outlined, keyboardType: const TextInputType.numberWithOptions(decimal: true)),\n              const SizedBox(height: 10),\n              const Text('Esse valor ajuda o app a estimar um limite preliminar de rentabilidade para Ads. Taxas, impostos, frete, embalagem e outros custos variáveis não entram automaticamente nessa conta.', style: TextStyle(fontSize: 12)),",
-"InputBox(controller: productCost, label: 'Custo total do produto', icon: Icons.inventory_2_outlined, keyboardType: const TextInputType.numberWithOptions(decimal: true)),\n              const SizedBox(height: 8),\n              const NoticeBox(icon: Icons.info_outline, text: 'Considere o que sai do seu bolso por venda: produto, embalagem, etiqueta, proteção e outros materiais. Não inclua aqui os 20% + R\\$ 4 da Shopee: o app já considera essas taxas automaticamente.'),")
-
 # CAPTCHA no coletor: o clique manual precisa SEMPRE forçar um novo enquadramento.
 replace('shopee_web_collector_v2.dart',
 """  Future<void> _focusChallengeOnce() async {
@@ -74,4 +66,4 @@ new_gate = """const r=target.getBoundingClientRect();
             window.scrollBy({left:dx,top:dy,behavior:'auto'});"""
 replace('shopee_verification_gate.dart', old_gate, new_gate)
 
-print('Correcoes finais v1.5.6 aplicadas ao build.')
+print('Correcoes finais v1.5.7 aplicadas ao build.')
