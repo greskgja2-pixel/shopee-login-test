@@ -14,6 +14,18 @@ class ShopeeWebCollectorV2 {
         .map((e) => '$e'.trim())
         .where((e) => e.startsWith('http'))
         .toList();
+    final variations = <ProductVariationData>[];
+    for (final value in (raw['variations'] as List? ?? const [])) {
+      if (value is! Map) continue;
+      final v = Map<String, dynamic>.from(value);
+      final name = '${v['name'] ?? ''}'.trim();
+      if (name.isEmpty) continue;
+      variations.add(ProductVariationData(
+        name: name,
+        price: _d(v['price']),
+        sold: _i(v['sold']),
+      ));
+    }
     return RichShopeeProductData(
       url: '${raw['url'] ?? url}',
       shopId: shopId,
@@ -38,7 +50,8 @@ class ShopeeWebCollectorV2 {
       imageCount: _i(raw['imageCount']) ?? imageUrls.length,
       hasVideo: raw['hasVideo'] == true,
       attributesCount: _i(raw['attributesCount']) ?? 0,
-      variationCount: _i(raw['variationCount']) ?? 0,
+      variationCount: _i(raw['variationCount']) ?? variations.length,
+      variations: variations,
     );
   }
 
@@ -493,6 +506,11 @@ const SA2={
  price:v=>{const n=Number(v);if(!Number.isFinite(n)||n<=0)return null;return n>10000?n/100000:n;},
  img:k=>!k?null:(String(k).startsWith('http')?String(k):'https://down-br.img.susercontent.com/file/'+k),
  cat:item=>{const a=item?.fe_categories||item?.categories||[];if(!Array.isArray(a))return String(item?.category_name||item?.category||'');return a.map(x=>x?.display_name||x?.name||x?.catname).filter(Boolean).join(' > ');},
+ itemSold:item=>{
+   const values=[item?.historical_sold,item?.global_sold_count,item?.sold,item?.sold_count,item?.sales,item?.order_count,item?.orders];
+   const nums=values.map(Number).filter(v=>Number.isFinite(v)&&v>=0);
+   return nums.length?Math.max(...nums):null;
+ },
  modelPrice:m=>SA2.price(m?.price??m?.current_price??m?.promotion_price??m?.price_stocks?.[0]?.current_price??m?.price_stocks?.[0]?.promotion_price),
  modelSold:m=>{
    const values=[m?.sold,m?.historical_sold,m?.global_sold_count,m?.sold_count,m?.model_sold,m?.sales,m?.order_count,m?.orders];
@@ -533,7 +551,8 @@ const SA2={
      bestSellingVariationName:leader?.name??null,
      bestSellingVariationPrice:leader?.price??null,
      bestSellingVariationSold:leader?.sold??null,
-     priceBasis:leader?'best_selling_variation':(models.length?'variation_fallback':'item_price')
+     priceBasis:leader?'best_selling_variation':(models.length?'variation_fallback':'item_price'),
+     variations:rows
    };
  },
  detail:async ids=>{
@@ -550,7 +569,7 @@ const SA2={
    const models=Array.isArray(item?.models)?item.models:[];
    const tiers=Array.isArray(item?.tier_variations)?item.tier_variations:[];
    const pricing=SA2.pricing(item);
-   return {url:location.href,shopId:String(ids.shopId),itemId:String(ids.itemId),title:String(item?.name||item?.title||''),description:String(item?.description||''),category:SA2.cat(item),imageUrl:SA2.img(item?.image||item?.image_id||images[0]),imageUrls,price:pricing.analysisPrice,priceBeforeDiscount:SA2.price(item?.price_before_discount??item?.price_min_before_discount),priceMin:pricing.priceMin,priceMax:pricing.priceMax,bestSellingVariationName:pricing.bestSellingVariationName,bestSellingVariationPrice:pricing.bestSellingVariationPrice,bestSellingVariationSold:pricing.bestSellingVariationSold,priceBasis:pricing.priceBasis,rating:Number.isFinite(rating)?rating:null,reviewCount:Number(item?.cmt_count??item?.rating_count??item?.review_count)||null,sold:Number(item?.sold??item?.historical_sold??item?.global_sold_count)||null,stock:Number(item?.stock)||null,imageCount:images.length,hasVideo:(Array.isArray(item?.video_info_list)&&item.video_info_list.length>0)||!!item?.video_info,attributesCount:Array.isArray(item?.attributes)?item.attributes.length:0,variationCount:models.length||tiers.length};
+   return {url:location.href,shopId:String(ids.shopId),itemId:String(ids.itemId),title:String(item?.name||item?.title||''),description:String(item?.description||''),category:SA2.cat(item),imageUrl:SA2.img(item?.image||item?.image_id||images[0]),imageUrls,price:pricing.analysisPrice,priceBeforeDiscount:SA2.price(item?.price_before_discount??item?.price_min_before_discount),priceMin:pricing.priceMin,priceMax:pricing.priceMax,bestSellingVariationName:pricing.bestSellingVariationName,bestSellingVariationPrice:pricing.bestSellingVariationPrice,bestSellingVariationSold:pricing.bestSellingVariationSold,priceBasis:pricing.priceBasis,rating:Number.isFinite(rating)?rating:null,reviewCount:Number(item?.cmt_count??item?.rating_count??item?.review_count)||null,sold:SA2.itemSold(item),stock:Number(item?.stock)||null,imageCount:images.length,hasVideo:(Array.isArray(item?.video_info_list)&&item.video_info_list.length>0)||!!item?.video_info,attributesCount:Array.isArray(item?.attributes)?item.attributes.length:0,variationCount:models.length||tiers.length,variations:pricing.variations};
  }
 };
 ''';
@@ -621,7 +640,7 @@ const SA2={
      x.description=String(d?.description||'');
      x.category=SA2.cat(d);
      x.rating=Number(d?.item_rating?.rating_star??d?.rating_star)||null;
-     x.sold=Number(d?.sold??d?.historical_sold??d?.global_sold_count)||x.sold;
+     x.sold=SA2.itemSold(d)??x.sold;
      x.price=pricing.analysisPrice||x.price;
      x.priceMin=pricing.priceMin||x.priceMin;
      x.priceMax=pricing.priceMax||x.priceMax;
