@@ -37,6 +37,11 @@ class GeminiService {
           'hasVideo': p?.hasVideo,
           'attributesCount': p?.attributesCount,
           'variationCount': p?.variationCount,
+          'variations': p?.variations.map((v) => {
+            'name': v.name,
+            'price': v.price,
+            'sold': v.sold,
+          }).toList(),
         },
         'competitors': input.competitors.map((c) => {
           'title': c.title,
@@ -63,9 +68,11 @@ class GeminiService {
           'roasTarget': input.roasTarget,
           'adsSpend7d': input.adsSpend7d,
           'productCost': input.productCost,
-          'costWarning': input.productCost == null
+          'variationCosts': input.variationCosts,
+          'effectiveProductCost': input.effectiveProductCost,
+          'costWarning': input.effectiveProductCost == null
               ? null
-              : 'O custo informado é somente do produto e não inclui automaticamente taxas, impostos, frete, embalagem ou outros custos variáveis.',
+              : 'O custo informado representa os custos próprios por venda. Quando houver custo específico da variação líder, ele tem prioridade sobre o custo padrão. As taxas da Shopee são tratadas separadamente pelo app.',
         },
       };
       req.write(jsonEncode(payload));
