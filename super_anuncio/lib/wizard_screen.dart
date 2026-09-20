@@ -38,6 +38,7 @@ class _PreparationWizardState extends State<PreparationWizard> {
   final roasTarget = TextEditingController();
   final adsSpend = TextEditingController();
   final productCost = TextEditingController();
+  final Map<String, TextEditingController> variationCostControllers = {};
   List<CompetitorCandidate> candidates = [];
   final Set<String> selectedIds = {};
   final List<CompetitorCandidate> manualCompetitors = [];
@@ -59,6 +60,36 @@ class _PreparationWizardState extends State<PreparationWizard> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadProduct());
   }
 
+  void _prepareVariationCosts(ShopeeProductData product) {
+    for (final variation in product.variations) {
+      variationCostControllers.putIfAbsent(
+        variation.name,
+        () {
+          final previous = widget.previousInput?.variationCosts[variation.name];
+          return TextEditingController(
+            text: previous == null ? '' : previous.toStringAsFixed(2).replaceAll('.', ','),
+          );
+        },
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    title.dispose();
+    description.dispose();
+    category.dispose();
+    price.dispose();
+    roas.dispose();
+    roasTarget.dispose();
+    adsSpend.dispose();
+    productCost.dispose();
+    for (final controller in variationCostControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
   Future<void> _loadProduct() async {
     if (!mounted) return;
     setState(() {
@@ -76,6 +107,7 @@ class _PreparationWizardState extends State<PreparationWizard> {
         });
         return;
       }
+      _prepareVariationCosts(product);
       setState(() {
         autoProduct = product;
         title.text = product.title;
@@ -151,6 +183,11 @@ class _PreparationWizardState extends State<PreparationWizard> {
       ...candidates.where((c) => selectedIds.contains(c.key)),
       ...manualCompetitors.where((c) => selectedIds.contains(c.key)),
     ].take(3).toList();
+    final variationCosts = <String, double>{};
+    for (final entry in variationCostControllers.entries) {
+      final value = parseMoney(entry.value.text);
+      if (value != null && value >= 0) variationCosts[entry.key] = value;
+    }
     final input = AnalysisInput(
       url: widget.initialUrl,
       title: title.text.trim(),
@@ -165,6 +202,7 @@ class _PreparationWizardState extends State<PreparationWizard> {
       roasTarget: adsActive ? parseNumber(roasTarget.text) : null,
       adsSpend7d: adsActive ? parseMoney(adsSpend.text) : null,
       productCost: parseMoney(productCost.text),
+      variationCosts: variationCosts,
       product: autoProduct,
       competitors: selected,
     );
@@ -368,12 +406,68 @@ class _PreparationWizardState extends State<PreparationWizard> {
           child: ExpansionTile(
             leading: const Icon(Icons.account_balance_wallet_outlined),
             title: const Text('Custos e margem (opcional)', style: TextStyle(fontWeight: FontWeight.w800)),
-            subtitle: const Text('Preencha só se você souber o custo do produto.'),
+            subtitle: Text(autoProduct?.variations.isNotEmpty == true
+                ? 'Informe um custo geral e, se necessário, o custo específico de cada variação.'
+                : 'Informe, se possível, o custo total que você tem para preparar uma venda.'),
             childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             children: [
-              InputBox(controller: productCost, label: 'Custo do produto', icon: Icons.inventory_2_outlined, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
-              const SizedBox(height: 10),
-              const Text('Esse valor ajuda o app a estimar um limite preliminar de rentabilidade para Ads. Taxas, impostos, frete, embalagem e outros custos variáveis não entram automaticamente nessa conta.', style: TextStyle(fontSize: 12)),
+              InputBox(
+                controller: productCost,
+                label: autoProduct?.variations.isNotEmpty == true ? 'Custo padrão / fallback' : 'Custo total do produto',
+                icon: Icons.inventory_2_outlined,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              ),
+              if (autoProduct?.variations.isNotEmpty == true) ...[
+                const SizedBox(height: 16),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Custo por variação', style: TextStyle(fontWeight: FontWeight.w900)),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'O custo específico substitui o custo padrão somente naquela variação. A variação mais vendida será usada no cálculo principal de margem e ROAS quando a Shopee informar esse dado.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 10),
+                for (final variation in autoProduct!.variations) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(variation.name, style: const TextStyle(fontWeight: FontWeight.w800)),
+                            if (variation.price != null || variation.sold != null)
+                              Text(
+                                [
+                                  if (variation.price != null) 'Venda: ${money(variation.price!)}',
+                                  if (variation.sold != null) '${variation.sold} vendido(s)',
+                                ].join(' • '),
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: 145,
+                        child: InputBox(
+                          controller: variationCostControllers[variation.name]!,
+                          label: 'Custo',
+                          icon: Icons.payments_outlined,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                ],
+              ],
+              const SizedBox(height: 8),
+              const NoticeBox(
+                icon: Icons.info_outline,
+                text: 'Considere o que sai do seu bolso por venda: produto, embalagem, etiqueta, proteção e outros materiais. Não inclua aqui os 20% + R\$ 4 da Shopee: o app já considera essas taxas automaticamente.',
+              ),
             ],
           ),
         ),
