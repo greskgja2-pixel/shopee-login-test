@@ -119,20 +119,31 @@ class ShopeeWebCollectorV2 {
     }
 
     final sourceTerms = terms(title);
-    int relevance(CompetitorCandidate item) {
+
+    int relevanceTier(CompetitorCandidate item) {
       final itemTerms = terms(item.title);
       if (sourceTerms.isEmpty || itemTerms.isEmpty) return 0;
       var matches = 0;
       for (final word in sourceTerms) {
         if (itemTerms.contains(word)) matches++;
       }
-      return matches;
+
+      // A relevância é agrupada em faixas. Assim, pequenas diferenças de
+      // palavras no título não deixam um anúncio com poucas/nenhuma venda
+      // acima de outro que é igualmente relevante e vende muito mais.
+      final strongThreshold = math.max(2, (sourceTerms.length * .45).ceil());
+      if (matches >= strongThreshold) return 3;
+      if (matches >= 2) return 2;
+      if (matches == 1) return 1;
+      return 0;
     }
 
     out.sort((a, b) {
-      final relevanceCompare = relevance(b).compareTo(relevance(a));
-      if (relevanceCompare != 0) return relevanceCompare;
+      final tierCompare = relevanceTier(b).compareTo(relevanceTier(a));
+      if (tierCompare != 0) return tierCompare;
 
+      // Dentro da mesma faixa de relevância, o critério principal é venda.
+      // Anúncios sem dado de vendas ficam depois dos que têm venda confirmada.
       final soldA = a.sold ?? -1;
       final soldB = b.sold ?? -1;
       final soldCompare = soldB.compareTo(soldA);
