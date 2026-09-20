@@ -682,7 +682,7 @@ const SA2={
             Positioned(
               left: 8,
               right: 8,
-              top: 8,
+              bottom: 8,
               child: SafeArea(
                 child: Card(
                   elevation: 8,
