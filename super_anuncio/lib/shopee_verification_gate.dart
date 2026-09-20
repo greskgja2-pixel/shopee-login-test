@@ -365,7 +365,7 @@ class _ShopeeVerificationPageState extends State<_ShopeeVerificationPage> {
             Positioned(
               left: 10,
               right: 10,
-              top: 8,
+              bottom: 8,
               child: SafeArea(
                 child: Card(
                   elevation: 8,
