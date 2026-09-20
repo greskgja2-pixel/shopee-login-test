@@ -419,6 +419,7 @@ Map<String, dynamic> _inputToJson(AnalysisInput i) => {
       'roasTarget': i.roasTarget,
       'adsSpend7d': i.adsSpend7d,
       'productCost': i.productCost,
+      'variationCosts': i.variationCosts,
       'product': _productToJson(i.product),
       'competitors': i.competitors.map(_competitorToJson).toList(),
     };
@@ -443,6 +444,15 @@ AnalysisInput _inputFromJson(Map<String, dynamic> m) {
     roasTarget: _asDouble(m['roasTarget']),
     adsSpend7d: _asDouble(m['adsSpend7d']),
     productCost: _asDouble(m['productCost']),
+    variationCosts: (m['variationCosts'] is Map)
+        ? Map<String, double>.fromEntries(
+            Map<String, dynamic>.from(m['variationCosts'] as Map)
+                .entries
+                .map((e) => MapEntry(e.key, _asDouble(e.value)))
+                .where((e) => e.value != null)
+                .map((e) => MapEntry(e.key, e.value!)),
+          )
+        : const {},
     product: _productFromJson(m['product']),
     competitors: comps,
   );
@@ -475,6 +485,9 @@ Map<String, dynamic>? _productToJson(ShopeeProductData? p) {
     'hasVideo': p.hasVideo,
     'attributesCount': p.attributesCount,
     'variationCount': p.variationCount,
+    'variations': p.variations
+        .map((v) => {'name': v.name, 'price': v.price, 'sold': v.sold})
+        .toList(),
   };
 }
 
@@ -507,6 +520,18 @@ ShopeeProductData? _productFromJson(dynamic raw) {
     hasVideo: m['hasVideo'] == true,
     attributesCount: _asInt(m['attributesCount']) ?? 0,
     variationCount: _asInt(m['variationCount']) ?? 0,
+    variations: (m['variations'] as List? ?? const [])
+        .whereType<Map>()
+        .map((raw) {
+          final v = Map<String, dynamic>.from(raw);
+          return ProductVariationData(
+            name: '${v['name'] ?? ''}'.trim(),
+            price: _asDouble(v['price']),
+            sold: _asInt(v['sold']),
+          );
+        })
+        .where((v) => v.name.isNotEmpty)
+        .toList(),
   );
 }
 
