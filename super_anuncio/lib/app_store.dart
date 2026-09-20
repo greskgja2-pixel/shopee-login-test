@@ -29,6 +29,7 @@ class RichShopeeProductData extends ShopeeProductData {
     required super.hasVideo,
     required super.attributesCount,
     required super.variationCount,
+    super.variations = const [],
     this.imageUrls = const [],
   });
 }
