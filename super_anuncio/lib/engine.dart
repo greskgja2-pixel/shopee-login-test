@@ -1,5 +1,12 @@
 part of 'main.dart';
 
+class ProductVariationData {
+  final String name;
+  final double? price;
+  final int? sold;
+  const ProductVariationData({required this.name, required this.price, required this.sold});
+}
+
 class AnalysisInput {
   final String url;
   final String title;
@@ -14,6 +21,7 @@ class AnalysisInput {
   final double? roasTarget;
   final double? adsSpend7d;
   final double? productCost;
+  final Map<String, double> variationCosts;
   final ShopeeProductData? product;
   final List<CompetitorCandidate> competitors;
   const AnalysisInput({
@@ -30,9 +38,19 @@ class AnalysisInput {
     this.roasTarget,
     required this.adsSpend7d,
     this.productCost,
+    this.variationCosts = const {},
     required this.product,
     required this.competitors,
   });
+
+  double? get effectiveProductCost {
+    final variationName = product?.bestSellingVariationName;
+    if (variationName != null) {
+      final value = variationCosts[variationName];
+      if (value != null) return value;
+    }
+    return productCost;
+  }
 }
 
 class ShopeeProductData {
@@ -59,6 +77,7 @@ class ShopeeProductData {
   final bool hasVideo;
   final int attributesCount;
   final int variationCount;
+  final List<ProductVariationData> variations;
   const ShopeeProductData({
     required this.url,
     required this.shopId,
@@ -83,6 +102,7 @@ class ShopeeProductData {
     required this.hasVideo,
     required this.attributesCount,
     required this.variationCount,
+    this.variations = const [],
   });
 }
 
