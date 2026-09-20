@@ -29,6 +29,7 @@ class _SaArcadePageState extends State<SaArcadePage> {
   int score = 0;
   int lives = 3;
   int tick = 0;
+  bool gameStarted = false;
   bool gameOver = false;
   bool muted = false;
   late int highScore;
@@ -39,8 +40,6 @@ class _SaArcadePageState extends State<SaArcadePage> {
     super.initState();
     highScore = widget.highScore;
     widget.onUnlock({102});
-    _startAudio();
-    _startLoop();
   }
 
   Future<void> _startAudio() async {
@@ -53,7 +52,7 @@ class _SaArcadePageState extends State<SaArcadePage> {
   }
 
   void _update() {
-    if (!mounted || gameOver) return;
+    if (!mounted || !gameStarted || gameOver) return;
     tick++;
 
     // Aproximadamente 4 tiros por segundo. O jogador só precisa pilotar.
@@ -110,13 +109,13 @@ class _SaArcadePageState extends State<SaArcadePage> {
   }
 
   void _shootAuto() {
-    if (gameOver) return;
+    if (!gameStarted || gameOver) return;
     bullets.add(_ArcadeBullet(x: shipX, y: .82));
     if (!muted && tick % 30 == 0) audio.shot();
   }
 
   void _move(double dx, double width) {
-    if (gameOver || width <= 0) return;
+    if (!gameStarted || gameOver || width <= 0) return;
     setState(() => shipX = (shipX + dx / width).clamp(.05, .95).toDouble());
   }
 
@@ -129,8 +128,24 @@ class _SaArcadePageState extends State<SaArcadePage> {
     setState(() {});
   }
 
+  Future<void> _startGame() async {
+    setState(() {
+      gameStarted = true;
+      gameOver = false;
+      bullets.clear();
+      enemies.clear();
+      score = 0;
+      lives = 3;
+      tick = 0;
+      shipX = .5;
+    });
+    if (!muted) await audio.startRockLoop();
+    _startLoop();
+  }
+
   void _restart() {
     setState(() {
+      gameStarted = true;
       bullets.clear();
       enemies.clear();
       score = 0;
@@ -204,6 +219,73 @@ class _SaArcadePageState extends State<SaArcadePage> {
                   child: Text('Arraste para mover • tiros automáticos • acerte 🥚 e 🐙', textAlign: TextAlign.center, style: TextStyle(color: Colors.white.withOpacity(.82), fontWeight: FontWeight.w800)),
                 ),
               ),
+              if (!gameStarted)
+                Positioned.fill(
+                  child: ColoredBox(
+                    color: const Color(0xFF070A18),
+                    child: Center(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(28),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.rocket_launch, size: 82, color: kOrange),
+                            const SizedBox(height: 18),
+                            const Text(
+                              'SA • AUDITOR CÓSMICO',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Recorde: $highScore pontos',
+                              style: TextStyle(color: Colors.white.withOpacity(.78), fontWeight: FontWeight.w800),
+                            ),
+                            const SizedBox(height: 24),
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(.07),
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(color: Colors.white.withOpacity(.12)),
+                              ),
+                              child: const Column(
+                                children: [
+                                  Text('COMO JOGAR', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'Arraste para mover a nave. Os tiros são automáticos. Acerte os inimigos e não deixe eles passarem.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(color: Colors.white70),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.icon(
+                                onPressed: _startGame,
+                                icon: const Icon(Icons.play_arrow),
+                                label: const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 14),
+                                  child: Text('JOGAR', style: TextStyle(fontWeight: FontWeight.w900)),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            TextButton.icon(
+                              onPressed: _toggleMute,
+                              icon: Icon(muted ? Icons.volume_off : Icons.music_note),
+                              label: Text(muted ? 'Música desligada' : 'Música ligada'),
+                              style: TextButton.styleFrom(foregroundColor: Colors.white),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               if (gameOver)
                 Positioned.fill(
                   child: ColoredBox(
