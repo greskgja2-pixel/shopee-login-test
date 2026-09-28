@@ -1,0 +1,11 @@
+{
+  "version": "0.17.6",
+  "released_at": "2026-09-28T16:57:00-03:00",
+  "download_url": "",
+  "sha256": "1433faef0644af04ccdf827365d8e230c9a78d444a676e6e67986cce54054d1c",
+  "notes": [
+    "Sistema de atualização integrado ao painel do Motor Senior",
+    "Exibe versão instalada e versão mais recente",
+    "Verificação manual e automática de nova versão"
+  ]
+}
