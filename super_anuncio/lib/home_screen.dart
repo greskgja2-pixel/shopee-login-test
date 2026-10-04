@@ -174,6 +174,137 @@ class _HomePageState extends State<HomePage> {
     await _persist();
   }
 
+  Future<void> _exportBackup() async {
+    try {
+      final payload = <String, dynamic>{
+        'format': 'super_anuncio_backup',
+        'backupVersion': 1,
+        'appVersion': '1.5.10',
+        'exportedAt': DateTime.now().toIso8601String(),
+        'state': appState.toJson(),
+      };
+      final cache = await kShareChannel.invokeMethod<String>('cacheDir');
+      if (cache == null || cache.isEmpty) throw Exception('Pasta temporária indisponível.');
+      final now = DateTime.now();
+      String two(int v) => v.toString().padLeft(2, '0');
+      final name = 'Super-Anuncio-backup_${now.year}-${two(now.month)}-${two(now.day)}_${two(now.hour)}-${two(now.minute)}.json';
+      final file = File('$cache/$name');
+      await file.writeAsString(const JsonEncoder.withIndent('  ').convert(payload), flush: true);
+      await kShareChannel.invokeMethod('shareFile', {
+        'path': file.path,
+        'mime': 'application/json',
+        'title': 'Salvar backup do Super Anúncio',
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Backup criado. Salve o arquivo em Downloads, Drive ou outro local seguro.'),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Não foi possível exportar o backup: $e')));
+      }
+    }
+  }
+
+  Future<void> _importBackup() async {
+    try {
+      final raw = await kShareChannel.invokeMethod<String>('pickBackupFile');
+      if (raw == null || raw.trim().isEmpty || !mounted) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) throw const FormatException('Arquivo de backup inválido.');
+      final map = Map<String, dynamic>.from(decoded);
+      dynamic stateRaw;
+      if (map['format'] == 'super_anuncio_backup') {
+        stateRaw = map['state'];
+      } else if (map.containsKey('products') || map.containsKey('tasks')) {
+        stateRaw = map;
+      } else {
+        throw const FormatException('Este arquivo não parece ser um backup do Super Anúncio.');
+      }
+      final imported = PersistedAppState.fromJson(stateRaw);
+      final totalAnalyses = imported.products.fold<int>(0, (sum, p) => sum + p.analyses.length);
+      if (imported.products.isEmpty && imported.tasks.isEmpty && totalAnalyses == 0) {
+        throw const FormatException('O backup não contém dados para importar.');
+      }
+
+      final action = await showDialog<String>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Como deseja importar?'),
+          content: Text(
+            'O backup contém ${imported.products.length} produto(s) e $totalAnalyses análise(s).\n\n'
+            'Mesclar mantém os dados atuais e adiciona o que estiver faltando. '
+            'Substituir apaga os dados locais atuais e usa somente o backup.',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+            OutlinedButton(onPressed: () => Navigator.pop(context, 'replace'), child: const Text('Substituir')),
+            FilledButton(onPressed: () => Navigator.pop(context, 'merge'), child: const Text('Mesclar')),
+          ],
+        ),
+      );
+      if (action == null || !mounted) return;
+
+      final next = action == 'replace' ? imported : _mergeImportedState(appState, imported);
+      setState(() => appState = next);
+      await AppStore.save(appState);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(action == 'replace' ? 'Backup restaurado com sucesso.' : 'Backup mesclado com sucesso.'),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Não foi possível importar o backup: $e')));
+      }
+    }
+  }
+
+  PersistedAppState _mergeImportedState(PersistedAppState current, PersistedAppState imported) {
+    final merged = PersistedAppState.fromJson(current.toJson());
+    for (final incoming in imported.products) {
+      ProductHistoryRecord? target;
+      for (final p in merged.products) {
+        if (p.key == incoming.key) {
+          target = p;
+          break;
+        }
+      }
+      if (target == null) {
+        final copy = ProductHistoryRecord.fromJson(incoming.toJson());
+        if (copy != null) merged.products.add(copy);
+        continue;
+      }
+      if (incoming.url.isNotEmpty) target.url = incoming.url;
+      if (incoming.title.isNotEmpty) target.title = incoming.title;
+      target.imageUrl ??= incoming.imageUrl;
+      final known = target.analyses.map((a) => a.id).toSet();
+      for (final analysis in incoming.analyses) {
+        if (known.add(analysis.id)) {
+          final copy = StoredAnalysis.fromJson(analysis.toJson());
+          if (copy != null) target.analyses.add(copy);
+        }
+      }
+    }
+
+    final taskIds = merged.tasks.map((t) => t.id).toSet();
+    for (final task in imported.tasks) {
+      if (taskIds.add(task.id)) {
+        final copy = ReanalysisTask.fromJson(task.toJson());
+        if (copy != null) merged.tasks.add(copy);
+      }
+    }
+    merged.unlockedAchievements.addAll(imported.unlockedAchievements);
+    merged.finalizedAnalyses = math.max(merged.finalizedAnalyses, imported.finalizedAnalyses);
+    merged.competitorSelections = math.max(merged.competitorSelections, imported.competitorSelections);
+    merged.adsAnalyses = math.max(merged.adsAnalyses, imported.adsAnalyses);
+    merged.bestScore = math.max(merged.bestScore, imported.bestScore);
+    merged.gameHighScore = math.max(merged.gameHighScore, imported.gameHighScore);
+    merged.gameHintDismissed = merged.gameHintDismissed || imported.gameHintDismissed;
+    return merged;
+  }
+
   void _dismissGameHint() {
     setState(() => appState.gameHintDismissed = true);
     _persist();
@@ -230,6 +361,8 @@ class _HomePageState extends State<HomePage> {
         onGenerated: _onGenerated,
         onFinalize: _finalize,
         onDeleteProduct: _deleteProductForResult,
+        onExportBackup: _exportBackup,
+        onImportBackup: _importBackup,
       ),
       TasksPage(state: appState, onGenerated: _onGenerated, onFinalize: _finalize),
       AchievementsPage(unlocked: appState.unlockedAchievements),
