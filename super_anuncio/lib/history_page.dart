@@ -7,12 +7,16 @@ class HistoryPage extends StatelessWidget {
   final AnalysisGeneratedCallback onGenerated;
   final Future<List<AchievementDef>> Function(AnalysisResult) onFinalize;
   final Future<void> Function(AnalysisResult) onDeleteProduct;
+  final Future<void> Function() onExportBackup;
+  final Future<void> Function() onImportBackup;
   const HistoryPage({
     super.key,
     required this.state,
     required this.onGenerated,
     required this.onFinalize,
     required this.onDeleteProduct,
+    required this.onExportBackup,
+    required this.onImportBackup,
   });
 
   List<StoredAnalysis> _finalized(ProductHistoryRecord product) {
@@ -33,6 +37,29 @@ class HistoryPage extends StatelessWidget {
           Text('Histórico', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 4),
           const Text('Cada produto mantém todas as auditorias e reanálises finalizadas ao longo do tempo.'),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: onExportBackup,
+                icon: const Icon(Icons.upload_file_outlined),
+                label: const Text('Exportar dados'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton.tonalIcon(
+                onPressed: onImportBackup,
+                icon: const Icon(Icons.download_for_offline_outlined),
+                label: const Text('Importar dados'),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 6),
+          Text(
+            'Use o backup antes de desinstalar ou trocar de aparelho.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           const SizedBox(height: 14),
           Expanded(
             child: products.isEmpty
