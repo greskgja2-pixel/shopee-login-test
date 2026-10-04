@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
@@ -16,6 +17,26 @@ class MainActivity : FlutterActivity() {
     private val channelName = "super_anuncio/share"
     private val prefsName = "super_anuncio_settings"
     private var channel: MethodChannel? = null
+    private var pendingImportResult: MethodChannel.Result? = null
+    private val backupPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val result = pendingImportResult
+        pendingImportResult = null
+        if (result == null) return@registerForActivityResult
+        if (uri == null) {
+            result.success(null)
+            return@registerForActivityResult
+        }
+        try {
+            val text = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            if (text.isNullOrBlank()) {
+                result.error("EMPTY_BACKUP", "O arquivo selecionado está vazio.", null)
+            } else {
+                result.success(text)
+            }
+        } catch (e: Exception) {
+            result.error("READ_BACKUP", e.message, null)
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -72,6 +93,14 @@ class MainActivity : FlutterActivity() {
                         } catch (e: Exception) {
                             result.error("SHARE_IMAGE", e.message, null)
                         }
+                    }
+                }
+                "pickBackupFile" -> {
+                    if (pendingImportResult != null) {
+                        result.error("PICKER_BUSY", "Já existe uma importação em andamento.", null)
+                    } else {
+                        pendingImportResult = result
+                        backupPicker.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
                     }
                 }
                 "shareFile" -> {
