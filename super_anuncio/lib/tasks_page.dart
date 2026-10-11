@@ -4,7 +4,8 @@ class TasksPage extends StatelessWidget {
   final PersistedAppState state;
   final AnalysisGeneratedCallback onGenerated;
   final Future<List<AchievementDef>> Function(AnalysisResult) onFinalize;
-  const TasksPage({super.key, required this.state, required this.onGenerated, required this.onFinalize});
+  final Future<void> Function(ReanalysisTask) onMarkCompleted;
+  const TasksPage({super.key, required this.state, required this.onGenerated, required this.onFinalize, required this.onMarkCompleted});
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +26,7 @@ class TasksPage extends StatelessWidget {
             const NoticeBox(icon: Icons.task_alt, text: 'Nenhuma reanálise pendente no momento.')
           else
             for (final task in pending) ...[
-              _PendingTaskCard(task: task, state: state, onGenerated: onGenerated, onFinalize: onFinalize),
+              _PendingTaskCard(task: task, state: state, onGenerated: onGenerated, onFinalize: onFinalize, onMarkCompleted: onMarkCompleted),
               const SizedBox(height: 10),
             ],
           const SizedBox(height: 24),
@@ -63,7 +64,8 @@ class _PendingTaskCard extends StatelessWidget {
   final PersistedAppState state;
   final AnalysisGeneratedCallback onGenerated;
   final Future<List<AchievementDef>> Function(AnalysisResult) onFinalize;
-  const _PendingTaskCard({required this.task, required this.state, required this.onGenerated, required this.onFinalize});
+  final Future<void> Function(ReanalysisTask) onMarkCompleted;
+  const _PendingTaskCard({required this.task, required this.state, required this.onGenerated, required this.onFinalize, required this.onMarkCompleted});
 
   @override
   Widget build(BuildContext context) {
@@ -86,6 +88,14 @@ class _PendingTaskCard extends StatelessWidget {
             Text('Meta de ROAS anterior: ${previous!.roasTarget!.toStringAsFixed(2)}', style: Theme.of(context).textTheme.bodySmall),
           ],
           const SizedBox(height: 11),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => onMarkCompleted(task),
+              icon: const Icon(Icons.check_circle_outline),
+              label: const Text('Marcar como realizada'),
+            ),
+          ),
           SizedBox(
             width: double.infinity,
             child: FilledButton.tonalIcon(
