@@ -57,6 +57,12 @@ class _PreparationWizardState extends State<PreparationWizard> {
       if (previous.adsSpend7d != null) adsSpend.text = previous.adsSpend7d!.toStringAsFixed(2).replaceAll('.', ',');
       if (previous.productCost != null) productCost.text = previous.productCost!.toStringAsFixed(2).replaceAll('.', ',');
     }
+    if (previous != null) {
+      for (final competitor in previous.competitors.take(3)) {
+        manualCompetitors.add(competitor);
+        selectedIds.add(competitor.key);
+      }
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadProduct());
   }
 
@@ -132,13 +138,13 @@ class _PreparationWizardState extends State<PreparationWizard> {
     setState(() {
       loadingCompetitors = true;
       candidates = [];
-      selectedIds.clear();
+      selectedIds..clear()..addAll(manualCompetitors.map((c) => c.key));
     });
     try {
       final found = await ShopeeWebCollectorV3.searchCompetitors(context, title.text.trim(), ownItemId: autoProduct?.itemId);
       if (!mounted) return;
       setState(() {
-        candidates = found.take(15).toList();
+        candidates = found.where((c) => !manualCompetitors.any((p) => p.key == c.key)).take(15).toList();
         loadingCompetitors = false;
       });
     } catch (_) {
