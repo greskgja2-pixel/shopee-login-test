@@ -215,6 +215,27 @@ class _ResultPageState extends State<ResultPage> {
 
   Future<void> _finalize() async {
     if (finalizing) return;
+    if (!widget.result.finalized) {
+      final days = await showDialog<int>(
+        context: context,
+        builder: (dialogContext) => SimpleDialog(
+          title: const Text('Quando reanalisar este anúncio?'),
+          children: [
+            for (final option in const [1, 3, 7])
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(dialogContext, option),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Text(option == 1 ? 'Em 1 dia' : option == 3 ? 'Em 3 dias' : 'Em 1 semana'),
+                ),
+              ),
+          ],
+        ),
+      );
+      if (days == null || !mounted) return;
+      final due = DateTime.now().add(Duration(days: days));
+      widget.result.reanalyzeAt = DateTime(due.year, due.month, due.day, 8);
+    }
     setState(() => finalizing = true);
     List<AchievementDef> unlocked = const [];
     if (!widget.result.finalized) {
@@ -257,7 +278,7 @@ class _ResultPageState extends State<ResultPage> {
         context: context,
         builder: (_) => AlertDialog(
           icon: const Icon(Icons.notifications_active_outlined, size: 44),
-          title: const Text('Tarefa criada para daqui a 7 dias'),
+          title: const Text('Próxima reanálise agendada'),
           content: Text('O Super Anúncio agendou uma notificação para ${formatDate(due)}. A tarefa também ficou salva na nova aba Tarefas.'),
           actions: [FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Entendi'))],
         ),
@@ -275,6 +296,7 @@ class _ResultPageState extends State<ResultPage> {
       builder: (_) => PreparationWizard(
         initialUrl: widget.result.input.url,
         previousAnalysisId: widget.storedAnalysisId,
+        previousInput: widget.result.input,
         onGenerated: widget.onGenerated,
         onFinalize: widget.onFinalize,
       ),

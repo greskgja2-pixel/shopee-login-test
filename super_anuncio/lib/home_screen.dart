@@ -110,14 +110,12 @@ class _HomePageState extends State<HomePage> {
     record.imageUrl = result.input.product?.imageUrl ?? record.imageUrl;
     record.analyses.add(stored);
 
-    if (previousAnalysisId != null && previousAnalysisId.isNotEmpty) {
-      for (final task in appState.tasks) {
-        if (!task.completed && task.sourceAnalysisId == previousAnalysisId) {
-          task.completedAt = DateTime.now();
-          task.completedAnalysisId = stored.id;
-          break;
-        }
-      }
+    for (final task in appState.tasks) {
+      if (task.completed || task.productKey != key || task.sourceAnalysisId == stored.id) continue;
+      final source = findStoredAnalysis(appState, task.sourceAnalysisId);
+      if (source == null || !source.result.finalized) continue;
+      task.completedAt = DateTime.now();
+      task.completedAnalysisId = stored.id;
     }
 
     if (mounted) setState(() {});
@@ -129,7 +127,7 @@ class _HomePageState extends State<HomePage> {
     final before = Set<int>.from(appState.unlockedAchievements);
     final now = DateTime.now();
     final targetDay = now.add(const Duration(days: 7));
-    final reanalysisDue = DateTime(targetDay.year, targetDay.month, targetDay.day, 8);
+    final reanalysisDue = result.reanalyzeAt ?? DateTime(targetDay.year, targetDay.month, targetDay.day, 8);
     final stored = findStoredForResult(appState, result);
     final product = findProductForAnalysis(appState, result);
 
@@ -162,6 +160,12 @@ class _HomePageState extends State<HomePage> {
     await _persist();
     final newIds = appState.unlockedAchievements.difference(before);
     return AchievementEngine.all.where((a) => newIds.contains(a.id)).toList();
+  }
+
+  Future<void> _markTaskCompleted(ReanalysisTask task) async {
+    if (task.completed) return;
+    setState(() => task.completedAt = DateTime.now());
+    await _persist();
   }
 
   Future<void> _deleteProductForResult(AnalysisResult result) async {
@@ -364,7 +368,7 @@ class _HomePageState extends State<HomePage> {
         onExportBackup: _exportBackup,
         onImportBackup: _importBackup,
       ),
-      TasksPage(state: appState, onGenerated: _onGenerated, onFinalize: _finalize),
+      TasksPage(state: appState, onGenerated: _onGenerated, onFinalize: _finalize, onMarkCompleted: _markTaskCompleted),
       AchievementsPage(unlocked: appState.unlockedAchievements),
       SettingsPage(
         darkMode: widget.darkMode,
